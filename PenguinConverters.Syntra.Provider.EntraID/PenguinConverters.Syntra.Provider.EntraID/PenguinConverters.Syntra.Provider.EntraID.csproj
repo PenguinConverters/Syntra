@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PenguinConverters.Syntra.Provider.EntraID</RootNamespace>
+    <AssemblyName>PenguinConverters.Syntra.Provider.EntraID</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>Syntra Team</Authors>
+    <Company>Penguin Converters AG</Company>
+    <Product>Syntra</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Graph" Version="5.*" />
+    <PackageReference Include="Azure.Identity" Version="1.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core.csproj" />
+  </ItemGroup>
+
+</Project>

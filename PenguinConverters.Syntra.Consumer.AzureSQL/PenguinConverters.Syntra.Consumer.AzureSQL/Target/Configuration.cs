@@ -1,0 +1,85 @@
+using PenguinConverters.Syntra.Core.Settings;
+
+namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
+
+/// <summary>
+/// Configuration settings for the Azure SQL consumer.
+/// Defines MSSQL destination parameters including connection, table schema,
+/// MERGE behavior, and parallel processing options.
+/// </summary>
+public class Configuration
+{
+    /// <summary>
+    /// Default maximum degree of parallelism for MERGE operations.
+    /// </summary>
+    public const int DefaultMaxDegreeOfParallelism = 4;
+
+    /// <summary>
+    /// Gets or sets the SQL Server connection string.
+    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// </summary>
+    public ProtectedString? ConnectionString { get; set; }
+
+    /// <summary>
+    /// Gets or sets the destination table name.
+    /// </summary>
+    public string? TableName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the column definitions for the target table.
+    /// Keys are column names, values define column metadata.
+    /// </summary>
+    public Dictionary<string, ColumnDefinition>? Columns { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of column names that form the primary key
+    /// used for MERGE matching.
+    /// </summary>
+    public List<string>? PrimaryKeys { get; set; }
+
+    /// <summary>
+    /// Gets or sets the deletion threshold as a percentage (0-100).
+    /// Prevents mass deletions during full sync by aborting when
+    /// the deletion count exceeds this threshold of existing rows.
+    /// </summary>
+    public int? Threshold { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum degree of parallelism for MERGE operations.
+    /// Defaults to <c>4</c>.
+    /// </summary>
+    public int MaxDegreeOfParallelism { get; set; } = DefaultMaxDegreeOfParallelism;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the target table has a <c>Deleted</c> column
+    /// for soft-delete tracking instead of physical row deletion.
+    /// </summary>
+    public bool HasDeletedColumn { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a shadow column is used
+    /// to store a JSON snapshot of the source entity for audit purposes.
+    /// </summary>
+    public bool ShadowColumn { get; set; }
+}
+
+/// <summary>
+/// Defines a column in the target SQL table.
+/// </summary>
+public class ColumnDefinition
+{
+    /// <summary>
+    /// Gets or sets the SQL data type for this column (e.g., "nvarchar(255)", "int").
+    /// </summary>
+    public string? SqlType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the source property name that maps to this column.
+    /// </summary>
+    public string? SourceProperty { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this column is part of the primary key.
+    /// </summary>
+    public bool IsPrimaryKey { get; set; }
+}

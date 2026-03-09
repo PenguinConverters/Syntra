@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="../../Keyra/PenguinConverters.CandyStore/PenguinConverters.CandyStore.csproj" />
+  <Project Path="../../Keyra/PenguinConverters.Keyra.Core/PenguinConverters.Keyra.Core.csproj" />
+  <Project Path="../../Keyra/PenguinConverters.Keyra/PenguinConverters.Keyra.csproj" />
+  <Project Path="../PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.csproj" />
+  <Project Path="PenguinConverters.Syntra.ActiveDirectory/PenguinConverters.Syntra.ActiveDirectory.csproj" />
+</Solution>
