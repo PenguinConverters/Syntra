@@ -1,0 +1,78 @@
+name: ✨ Feature Request
+description: Suggest a capability or improvement for Syntra
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Requesting a **new connector**? Use the
+        [Connector Request](https://github.com/PenguinConverters/Syntra/issues/new?template=connector_request.yml)
+        template instead.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and discussions and this is not a duplicate
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case, not just the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Core
+        - Api
+        - Host.Console
+        - Host.Service
+        - A provider
+        - A consumer
+        - SQL schema
+        - Documentation
+        - Build / packaging
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Including whether an existing feature or workaround gets you close.
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Would this be a breaking change?
+      options:
+        - "No"
+        - "Yes — configuration format changes"
+        - "Yes — public API changes"
+        - "Yes — database schema changes"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to open a pull request for this

@@ -1,0 +1,28 @@
+# Syntra code owners
+#
+# Code owners are automatically requested for review on any pull request that
+# touches the paths below, and their approval is required by the `main` ruleset.
+#
+# Order matters: the LAST matching pattern wins.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repository.
+*                                                       @PenguinConverters
+
+# Licensing, legal and repository governance — always review carefully.
+/LICENSE                                                @PenguinConverters
+/NOTICE                                                 @PenguinConverters
+/.github/                                               @PenguinConverters
+/Directory.Build.props                                  @PenguinConverters
+/NuGet.config                                           @PenguinConverters
+
+# Core framework: interfaces and builders every connector depends on.
+/PenguinConverters.Syntra.Core/                         @PenguinConverters
+
+# Security-sensitive surfaces: authentication, OBO flow, credential handling.
+/PenguinConverters.Syntra.Api/                          @PenguinConverters
+/PenguinConverters.Syntra.ActiveDirectory/              @PenguinConverters
+
+# Database schema — changes here affect every deployment.
+/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/  @PenguinConverters

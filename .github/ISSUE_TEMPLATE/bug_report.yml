@@ -1,0 +1,130 @@
+name: 🐛 Bug Report
+description: Report incorrect behaviour in Syntra
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        ⚠️ **Security vulnerability?** Stop — do not file it here.
+        Use [private vulnerability reporting](https://github.com/PenguinConverters/Syntra/security/advisories/new).
+
+        ⚠️ **Redact everything sensitive.** Replace real hostnames, domains, distinguished
+        names, IP addresses, tenant IDs, user names and connection strings with
+        placeholders such as `contoso.com` before you paste logs or configuration.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+        - label: This is not a security vulnerability
+          required: true
+        - label: I have redacted all sensitive data from the content below
+          required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of Syntra is affected?
+      options:
+        - Core
+        - Api
+        - Host.Console
+        - Host.Service
+        - ActiveDirectory (LDAP library)
+        - Provider.ActiveDirectory
+        - Provider.EntraID
+        - Provider.AzureResources
+        - Provider.AzureSQL
+        - Provider.Exchange
+        - Provider.ServiceNow
+        - Provider.CMDB
+        - Provider.Oracle
+        - Provider.DevOps
+        - Provider.Tenable
+        - Provider.Tufin
+        - Provider.Infoblox
+        - Provider.Ciphersuite
+        - Consumer.AzureSQL
+        - Consumer.ActiveDirectory
+        - Consumer.SchemaDesigner
+        - SQL schema (SharedSchema / AzureSQL.Schema)
+        - Build / packaging
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Syntra version
+      placeholder: "1.0.0.1, or the commit SHA"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the actual behaviour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration (redacted)
+      description: The relevant YAML or JSON, with all secrets and real identifiers removed.
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and stack trace (redacted)
+      render: text
+
+  - type: dropdown
+    id: syncmode
+    attributes:
+      label: Sync mode
+      options:
+        - Full sync
+        - Delta sync
+        - Schema mode (--schema)
+        - Not applicable
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - OS:
+        - .NET SDK version:
+        - Host: (Console / Windows Service / systemd / API)
+        - SQL Server version:
+    validations:
+      required: true

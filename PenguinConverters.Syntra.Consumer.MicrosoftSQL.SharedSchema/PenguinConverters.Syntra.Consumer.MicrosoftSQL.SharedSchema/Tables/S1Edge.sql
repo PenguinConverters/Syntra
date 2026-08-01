@@ -1,7 +1,7 @@
 -- =============================================
 -- Syntra - Penguin Converters AG
 -- Table: S1Edge
--- Description: Discovery graph edges
+-- Description: Security graph edges
 -- =============================================
 CREATE TABLE [dbo].[S1Edge]
 (

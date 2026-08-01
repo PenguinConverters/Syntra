@@ -1,0 +1,157 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # SQL schema builds with no proprietary dependencies, so it always runs and
+  # gives genuine signal on every pull request.
+  # ---------------------------------------------------------------------------
+  sql-schema:
+    name: SQL schema (dacpac)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Build SharedSchema
+        run: >-
+          dotnet build
+          PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema.sqlproj
+          -c Release
+
+      - name: Upload dacpac
+        uses: actions/upload-artifact@v4
+        with:
+          name: SharedSchema-dacpac
+          path: "**/bin/Release/**/*.dacpac"
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Every .NET project depends transitively on Syntra.Core, which references the
+  # proprietary Keyra SDK from a private feed. Without feed credentials nothing
+  # can restore, so this job reports why it was skipped instead of failing red.
+  # ---------------------------------------------------------------------------
+  check-keyra-feed:
+    name: Keyra feed availability
+    runs-on: ubuntu-latest
+    outputs:
+      available: ${{ steps.probe.outputs.available }}
+    steps:
+      - id: probe
+        env:
+          KEYRA_FEED_URL: ${{ secrets.KEYRA_FEED_URL }}
+        run: |
+          if [ -n "$KEYRA_FEED_URL" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Keyra feed configured — .NET build will run." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### ⏭️ .NET build skipped"
+              echo
+              echo "\`PenguinConverters.Syntra.Core\` depends on the **Keyra SDK**, a proprietary"
+              echo "component served from a private NuGet feed. Every other project depends on Core,"
+              echo "so no .NET project can be restored without it."
+              echo
+              echo "Maintainers: set the \`KEYRA_FEED_URL\`, \`KEYRA_FEED_USER\` and"
+              echo "\`KEYRA_FEED_TOKEN\` repository secrets to enable this job."
+              echo
+              echo "See [CONTRIBUTING.md](../blob/main/.github/CONTRIBUTING.md#the-keyra-sdk-dependency)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build:
+    name: Build & test (.NET)
+    needs: check-keyra-feed
+    if: needs.check-keyra-feed.outputs.available == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Add Keyra private feed
+        env:
+          KEYRA_FEED_URL: ${{ secrets.KEYRA_FEED_URL }}
+          KEYRA_FEED_USER: ${{ secrets.KEYRA_FEED_USER }}
+          KEYRA_FEED_TOKEN: ${{ secrets.KEYRA_FEED_TOKEN }}
+        shell: bash
+        run: |
+          dotnet nuget add source "$KEYRA_FEED_URL" \
+            --name keyra \
+            --username "$KEYRA_FEED_USER" \
+            --password "$KEYRA_FEED_TOKEN" \
+            --store-password-in-clear-text
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Build all solutions
+        shell: bash
+        run: |
+          status=0
+          for sln in $(git ls-files '*.slnx' '*.sln'); do
+            echo "::group::$sln"
+            dotnet build "$sln" -c Release --nologo || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Run tests
+        shell: bash
+        run: |
+          status=0
+          for proj in $(git ls-files '*.Tests/*.csproj'); do
+            echo "::group::$proj"
+            dotnet test "$proj" -c Release --nologo \
+              --logger "trx;LogFileName=$(basename "$proj" .csproj).trx" \
+              --results-directory TestResults \
+              --collect:"XPlat Code Coverage" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -13,9 +13,14 @@
     <PackageReference Include="YamlDotNet" Version="16.*" />
   </ItemGroup>
 
+  <!--
+    Keyra SDK - proprietary, separately licensed component (not covered by Syntra's
+    Apache-2.0 license). Consumed exclusively as a NuGet package from a private feed.
+    See NOTICE and .github/CONTRIBUTING.md for how to configure the feed.
+  -->
   <ItemGroup>
-    <ProjectReference Include="C:\Users\grego\source\Keyra\PenguinConverters.Keyra\PenguinConverters.Keyra.csproj" />
-    <ProjectReference Include="C:\Users\grego\source\Keyra\PenguinConverters.Keyra.Core\PenguinConverters.Keyra.Core.csproj" />
+    <PackageReference Include="PenguinConverters.Keyra" Version="2.14.*" />
+    <PackageReference Include="PenguinConverters.Keyra.Core" Version="2.14.*" />
   </ItemGroup>
 
 </Project>

@@ -1,0 +1,91 @@
+name: 🔌 Connector Request
+description: Request support for a new source (provider) or destination (consumer) system
+title: "[Connector]: "
+labels: ["connector", "enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Syntra loads connectors dynamically by reflection, so a new connector usually
+        needs no changes to Core. See
+        [connector-development.md](https://github.com/PenguinConverters/Syntra/blob/main/docs/connector-development.md).
+
+  - type: input
+    id: system
+    attributes:
+      label: Target system
+      description: Name and vendor of the system to connect to.
+      placeholder: "e.g. Okta, SAP SuccessFactors, Workday"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: Direction
+      options:
+        - Provider (read from this system)
+        - Consumer (write to this system)
+        - Both
+    validations:
+      required: true
+
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: What identity or automation problem does this connector solve?
+    validations:
+      required: true
+
+  - type: input
+    id: api
+    attributes:
+      label: API / protocol
+      placeholder: "e.g. REST + OAuth2 client credentials, SCIM 2.0, LDAP, ODBC"
+    validations:
+      required: true
+
+  - type: input
+    id: apidocs
+    attributes:
+      label: Link to the system's API documentation
+
+  - type: dropdown
+    id: delta
+    attributes:
+      label: Delta sync mechanism
+      description: How can changed records be identified without a full read?
+      options:
+        - DateTime / last-modified filter
+        - Change token or cursor
+        - Sequence number (USN-style)
+        - Webhooks / event stream
+        - None — full sync only
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: entities
+    attributes:
+      label: Entities to synchronize
+      placeholder: "e.g. users, groups, group memberships, devices, applications"
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication requirements
+      description: >-
+        Which credential types are needed? All secrets must be protected via the
+        Keyra SDK. Do not paste any actual credentials here.
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to implement this connector
+        - label: I have access to a test instance of this system

@@ -1,0 +1,47 @@
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Zurich
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - nuget
+    commit-message:
+      prefix: "CHANGE"
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      azure-sdk:
+        patterns:
+          - "Azure.*"
+          - "Microsoft.Identity.Web*"
+          - "Microsoft.Graph*"
+      test-dependencies:
+        patterns:
+          - "NUnit*"
+          - "Moq"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+    ignore:
+      # Proprietary, separately licensed — served from a private feed Dependabot cannot reach.
+      - dependency-name: "PenguinConverters.Keyra*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Zurich
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "CHANGE"

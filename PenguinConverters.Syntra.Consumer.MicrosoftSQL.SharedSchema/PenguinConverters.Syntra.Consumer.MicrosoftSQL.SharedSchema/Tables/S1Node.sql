@@ -1,7 +1,7 @@
 -- =============================================
 -- Syntra - Penguin Converters AG
 -- Table: S1Node
--- Description: Discovery graph nodes
+-- Description: Security graph nodes
 -- =============================================
 CREATE TABLE [dbo].[S1Node]
 (

@@ -22,7 +22,7 @@ PenguinConverters.Syntra
 - Provider = **Source** (reads from external system)
 - Consumer = **Destination** (writes to external system)
 - A system can be both a Provider AND a Consumer (e.g., ActiveDirectory, AzureSQL)
-- Never use `SIX.*`, `SwissRe.*`, or `Security.Discovery.*`
+- All namespaces must be rooted at `PenguinConverters.Syntra`; no other root is permitted
 
 ## 2. Database Naming Conventions
 
@@ -31,7 +31,7 @@ PenguinConverters.Syntra
 | Prefix | Domain | Description |
 |--------|--------|-------------|
 | `S1` | Syntra Core | Platform tables: transactions, approvals, identities, roles, relationships |
-| `S1` | Discovery | Security graph: nodes, edges, factor scoring |
+| `S1` | Security Graph | Security graph: nodes, edges, factor scoring |
 | `S1FE` | Frontend | Stored procedures that return UI definitions and data |
 
 Future extensions should use new prefixes (e.g., `C0` for compliance, `A0` for auditing) to maintain namespace separation.

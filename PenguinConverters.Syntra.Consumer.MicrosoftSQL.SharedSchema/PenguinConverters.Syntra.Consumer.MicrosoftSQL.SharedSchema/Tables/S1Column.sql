@@ -1,7 +1,7 @@
 -- =============================================
 -- Syntra - Penguin Converters AG
 -- Table: S1Column
--- Description: Column metadata tracking for discovery
+-- Description: Column metadata tracking for schema inference
 -- =============================================
 CREATE TABLE [dbo].[S1Column]
 (

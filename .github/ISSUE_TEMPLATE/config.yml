@@ -1,0 +1,22 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/PenguinConverters/Syntra/security/advisories/new
+    about: >-
+      Never report security issues in a public issue. Use private vulnerability
+      reporting so the report stays confidential until a fix ships.
+
+  - name: 💬 Question or general discussion
+    url: https://github.com/PenguinConverters/Syntra/discussions
+    about: Ask how to configure a connector, use the API, or design a sync.
+
+  - name: 📖 Documentation
+    url: https://github.com/PenguinConverters/Syntra#documentation
+    about: Architecture, user guide, API reference and connector development docs.
+
+  - name: 🔑 Keyra SDK licensing
+    url: https://github.com/PenguinConverters/Keyra-Releases
+    about: >-
+      Keyra is a separately licensed proprietary component. Licensing and Keyra
+      issues are handled outside this repository.
