@@ -9,7 +9,11 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" Version="8.0.*" />
-    <PackageReference Include="Microsoft.Identity.Web" Version="3.2.*" />
+    <!--
+      Minimum 3.8.2: versions >= 3.2.0, < 3.8.2 write client secrets and certificate
+      information to service logs (GHSA / Dependabot alert 1).
+    -->
+    <PackageReference Include="Microsoft.Identity.Web" Version="3.8.*" />
     <PackageReference Include="Microsoft.OpenApi" Version="1.6.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.*" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.*" />
