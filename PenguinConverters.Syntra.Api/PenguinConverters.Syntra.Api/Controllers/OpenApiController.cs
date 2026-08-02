@@ -207,14 +207,12 @@ public class OpenApiController : ControllerBase
                 ParameterInfo? existing = parameters.FirstOrDefault(p =>
                     p.Name.Equals(paramName, StringComparison.OrdinalIgnoreCase));
 
-                if (existing is not null)
+                if (existing is not null
+                    && reader.GetSchemaTable()?.Columns.Contains("Description") is true)
                 {
-                    if (reader.GetSchemaTable()?.Columns.Contains("Description") == true)
-                    {
-                        int descOrdinal = reader.GetOrdinal("Description");
-                        if (!reader.IsDBNull(descOrdinal))
-                            existing.Description = reader.GetString(descOrdinal);
-                    }
+                    int descOrdinal = reader.GetOrdinal("Description");
+                    if (!reader.IsDBNull(descOrdinal))
+                        existing.Description = reader.GetString(descOrdinal);
                 }
             }
         }

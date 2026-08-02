@@ -98,7 +98,9 @@ public class Provider : Core.Source.Provider
         // Full sync / delta changed objects
         // In a real implementation, this would call PenguinConverters.Syntra.ActiveDirectory connection
         // to execute the LDAP search and yield Entity objects per result.
-        Logger.LogTrace("Executing LDAP search with filter: {Filter}", ldapFilter);
+        Logger.LogTrace(
+            "Executing LDAP search with filter: {Filter} requesting {AttributeCount} attributes: {Attributes}",
+            ldapFilter, propertyList.Length, string.Join(", ", propertyList));
 
         // Delta deleted objects
         if (_configuration.Delta)
@@ -183,14 +185,9 @@ public class Provider : Core.Source.Provider
     /// </summary>
     internal void InitializeState()
     {
-        if (RawMetadata is not null && Deserializer is not null)
-        {
-            _state = DeserializeMetadata<State>() ?? new State();
-        }
-        else
-        {
-            _state = new State();
-        }
+        _state = RawMetadata is not null && Deserializer is not null
+            ? DeserializeMetadata<State>() ?? new State()
+            : new State();
     }
 
     /// <summary>

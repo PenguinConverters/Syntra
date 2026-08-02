@@ -109,16 +109,9 @@ public class Property
                 _hasString = true;
                 UpdateMaxLength(strValue.Length);
 
-                if (!_hasUnicode)
+                if (!_hasUnicode && strValue.Any(c => c > 127))
                 {
-                    foreach (char c in strValue)
-                    {
-                        if (c > 127)
-                        {
-                            _hasUnicode = true;
-                            break;
-                        }
-                    }
+                    _hasUnicode = true;
                 }
                 break;
 

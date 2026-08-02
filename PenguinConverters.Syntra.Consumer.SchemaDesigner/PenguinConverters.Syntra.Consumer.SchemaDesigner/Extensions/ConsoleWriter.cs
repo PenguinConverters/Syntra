@@ -44,7 +44,7 @@ public class ConsoleWriter
     {
         if (_buffer.Length > 0)
         {
-            Console.Write(_buffer.ToString());
+            Console.Out.Write(_buffer);
             _buffer.Clear();
         }
     }

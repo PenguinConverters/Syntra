@@ -1,6 +1,6 @@
 using System.Data;
 using System.Runtime.CompilerServices;
-using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -160,12 +160,12 @@ public class SyntraController : ControllerBase
         catch (SqlException ex) when (ex.Number == 229 || ex.Number == 230)
         {
             _logger.LogWarning(ex, "Access denied for entity {Entity} by user {User}",
-                entity, User.Identity?.Name);
+                SanitizeForLog(entity), SanitizeForLog(User.Identity?.Name));
             return Forbid();
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Invalid query parameters for entity {Entity}", entity);
+            _logger.LogWarning(ex, "Invalid query parameters for entity {Entity}", SanitizeForLog(entity));
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -294,12 +294,12 @@ public class SyntraController : ControllerBase
         catch (SqlException ex) when (ex.Number == 229 || ex.Number == 230)
         {
             _logger.LogWarning(ex, "Access denied for {Operation} on {Entity} by user {User}",
-                operation, entity, User.Identity?.Name);
+                operation, SanitizeForLog(entity), SanitizeForLog(User.Identity?.Name));
             return Forbid();
         }
         catch (SqlException ex)
         {
-            _logger.LogError(ex, "SQL error during {Operation} on {Entity}", operation, entity);
+            _logger.LogError(ex, "SQL error during {Operation} on {Entity}", operation, SanitizeForLog(entity));
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -466,10 +466,10 @@ public class SyntraController : ControllerBase
             if (scopes.Contains("user_impersonation"))
             {
                 string accessToken = await _tokenAcquisition.GetAccessTokenForUserAsync(
-                    [_dbSettings.SqlResource], user: User as ClaimsPrincipal);
+                    [_dbSettings.SqlResource], user: User);
 
                 connection.AccessToken = accessToken;
-                _logger.LogDebug("Using OBO token for user {User}", User.Identity?.Name);
+                _logger.LogDebug("Using OBO token for user {User}", SanitizeForLog(User.Identity?.Name));
             }
             else if (User.IsInRole("Syntra.AccessAsApp"))
             {
@@ -478,13 +478,13 @@ public class SyntraController : ControllerBase
                     _dbSettings.SqlResource);
 
                 connection.AccessToken = accessToken;
-                _logger.LogDebug("Using app token for service account {User}", User.Identity?.Name);
+                _logger.LogDebug("Using app token for service account {User}", SanitizeForLog(User.Identity?.Name));
             }
             else
             {
                 _logger.LogWarning(
                     "User {User} has neither user_impersonation scope nor Syntra.AccessAsApp role",
-                    User.Identity?.Name);
+                    SanitizeForLog(User.Identity?.Name));
                 throw new UnauthorizedAccessException(
                     "Insufficient permissions. Required: user_impersonation scope or Syntra.AccessAsApp role.");
             }
@@ -497,7 +497,7 @@ public class SyntraController : ControllerBase
         {
             _logger.LogWarning(ex,
                 "OBO token acquisition failed for user {User}, attempting app-level access",
-                User.Identity?.Name);
+                SanitizeForLog(User.Identity?.Name));
 
             // Fallback to app-level token
             string accessToken = await _tokenAcquisition.GetAccessTokenForAppAsync(
@@ -516,12 +516,10 @@ public class SyntraController : ControllerBase
     {
         Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (string key in Request.Query.Keys)
+        foreach (string key in Request.Query.Keys.Where(k =>
+            k.StartsWith('$') || k.StartsWith("@syntra.", StringComparison.OrdinalIgnoreCase)))
         {
-            if (key.StartsWith('$') || key.StartsWith("@syntra.", StringComparison.OrdinalIgnoreCase))
-            {
-                result[key] = Request.Query[key].ToString();
-            }
+            result[key] = Request.Query[key].ToString();
         }
 
         return result;
@@ -577,7 +575,40 @@ public class SyntraController : ControllerBase
     {
         string sanitized = new string(entity.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray());
         if (string.IsNullOrEmpty(sanitized))
-            throw new ArgumentException($"Invalid entity name: '{entity}'");
+            throw new ArgumentException($"Invalid entity name: '{SanitizeForLog(entity)}'");
         return sanitized;
+    }
+
+    /// <summary>
+    /// Sanitizes a caller-supplied value before it is written to a log or audit trail.
+    /// </summary>
+    /// <remarks>
+    /// Strips control characters - carriage returns and line feeds in particular - so a caller
+    /// cannot inject forged entries into the audit log, and caps the length so an oversized
+    /// value cannot flood it. Apply this to any value derived from a request route, query
+    /// string, body, or authenticated identity before logging it.
+    /// </remarks>
+    /// <param name="value">The untrusted value.</param>
+    /// <returns>A single-line, length-capped representation safe to log.</returns>
+    private static string SanitizeForLog(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return "(none)";
+
+        const int maxLength = 256;
+        StringBuilder builder = new StringBuilder(Math.Min(value.Length, maxLength));
+
+        foreach (char c in value)
+        {
+            if (builder.Length == maxLength)
+            {
+                builder.Append('…');
+                break;
+            }
+
+            builder.Append(char.IsControl(c) ? '_' : c);
+        }
+
+        return builder.ToString();
     }
 }

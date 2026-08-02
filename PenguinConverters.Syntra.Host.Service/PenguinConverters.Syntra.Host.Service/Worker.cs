@@ -294,13 +294,12 @@ public class Worker : IHostedService, IDisposable
             if (File.Exists(job.LeaseFilePath))
             {
                 string leaseContent = File.ReadAllText(job.LeaseFilePath);
-                if (DateTime.TryParse(leaseContent, out DateTime leaseTime))
+
+                // A lease older than 1 hour is considered stale and may be taken over.
+                if (DateTime.TryParse(leaseContent, out DateTime leaseTime)
+                    && DateTime.UtcNow - leaseTime < TimeSpan.FromHours(1))
                 {
-                    // If the lease is older than 1 hour, consider it stale
-                    if (DateTime.UtcNow - leaseTime < TimeSpan.FromHours(1))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
 
