@@ -100,16 +100,14 @@ public class Configuration
     public int CommandTimeoutSeconds { get; set; } = DefaultCommandTimeoutSeconds;
 
     /// <summary>
-    /// Gets or sets a value indicating whether this is a delta synchronization.
-    /// Deletion reconciliation is skipped when set, since an entity absent from a delta
-    /// run has not been deleted, it simply did not change.
-    /// </summary>
-    public bool Delta { get; set; }
-
-    /// <summary>
     /// Gets or sets a value indicating whether the target table has a <c>Deleted</c> column
     /// for soft-delete tracking instead of physical row deletion.
     /// </summary>
+    /// <remarks>
+    /// When set, an entity the source reports as deleted is staged like any other row with
+    /// <see cref="DeletedColumnName"/> stamped, and the MERGE applies it as an UPDATE. No
+    /// separate delete staging table is created.
+    /// </remarks>
     public bool HasDeletedColumn { get; set; }
 
     /// <summary>

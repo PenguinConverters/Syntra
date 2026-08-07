@@ -69,6 +69,109 @@ public class SqlStatementBuilderTests
     }
 
     [Test]
+    public void BuildTempTableName_AppliesSuffix()
+    {
+        //Arrange
+
+        //Act
+        string upsert = SqlStatementBuilder.BuildTempTableName(
+            "ActiveDirectory.groups2AzureSQL.ADGroup_DELTA", SqlStatementBuilder.UpsertSuffix);
+        string delete = SqlStatementBuilder.BuildTempTableName(
+            "ActiveDirectory.groups2AzureSQL.ADGroup_DELTA", SqlStatementBuilder.DeleteSuffix);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(upsert, Is.EqualTo("#S1_ActiveDirectory_groups2AzureSQL_ADGroup_DELTA_U"));
+            Assert.That(delete, Is.EqualTo("#S1_ActiveDirectory_groups2AzureSQL_ADGroup_DELTA_D"));
+            Assert.That(upsert, Is.Not.EqualTo(delete));
+        });
+    }
+
+    [Test]
+    public void BuildTempTableName_LongInputWithSuffix_KeepsSuffixDistinct()
+    {
+        //Arrange - truncation must not eat the suffix, or both tables collide.
+        string longName = new string('a', 400);
+
+        //Act
+        string upsert = SqlStatementBuilder.BuildTempTableName(longName, SqlStatementBuilder.UpsertSuffix);
+        string delete = SqlStatementBuilder.BuildTempTableName(longName, SqlStatementBuilder.DeleteSuffix);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(upsert, Does.EndWith(SqlStatementBuilder.UpsertSuffix));
+            Assert.That(delete, Does.EndWith(SqlStatementBuilder.DeleteSuffix));
+            Assert.That(upsert, Is.Not.EqualTo(delete));
+            Assert.That(upsert.Length, Is.LessThanOrEqualTo(116));
+        });
+    }
+
+    [Test]
+    public void BuildDeleteFromStaging_JoinsTargetToStagedKeys()
+    {
+        //Arrange
+        List<string> keys = new List<string> { "Id" };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildDeleteFromStaging("Users", "#Stage_D", keys);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.StartWith("DELETE target"));
+            Assert.That(sql, Does.Contain("FROM [Users] AS target"));
+            Assert.That(sql, Does.Contain("INNER JOIN [#Stage_D] AS staged"));
+            Assert.That(sql, Does.Contain("target.[Id] = staged.[Id]"));
+            Assert.That(sql, Does.EndWith(";"));
+        });
+    }
+
+    [Test]
+    public void BuildDeleteFromStaging_CompositeKey_AndsEveryColumn()
+    {
+        //Arrange
+        List<string> keys = new List<string> { "Tenant", "Id" };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildDeleteFromStaging("Users", "#Stage_D", keys);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.Contain("target.[Tenant] = staged.[Tenant]"));
+            Assert.That(sql, Does.Contain("AND target.[Id] = staged.[Id]"));
+        });
+    }
+
+    [Test]
+    public void BuildDeleteFromStaging_HostileIdentifier_IsEscaped()
+    {
+        //Arrange
+        List<string> keys = new List<string> { "I]d" };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildDeleteFromStaging("Users", "#Stage_D", keys);
+
+        //Assert
+        Assert.That(sql, Does.Contain("[I]]d]"));
+    }
+
+    [Test]
+    public void BuildDeleteFromStaging_NoPrimaryKeys_Throws()
+    {
+        //Arrange
+
+        //Act
+        TestDelegate action = () => SqlStatementBuilder.BuildDeleteFromStaging(
+            "Users", "#Stage_D", new List<string>());
+
+        //Assert
+        Assert.Throws<ArgumentException>(action);
+    }
+
+    [Test]
     public void BuildTempTableName_EmptyInput_FallsBackToDefault()
     {
         //Arrange
@@ -234,77 +337,6 @@ public class SqlStatementBuilderTests
 
         //Assert
         Assert.Throws<ArgumentException>(action);
-    }
-
-    [Test]
-    public void BuildDeleteReconciliation_WithoutDeletedColumn_EmitsHardDelete()
-    {
-        //Arrange
-        List<string> keys = new List<string> { "Id" };
-
-        //Act
-        string sql = SqlStatementBuilder.BuildDeleteReconciliation("Users", "#Seen", keys, null);
-
-        //Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(sql, Does.StartWith("DELETE target"));
-            Assert.That(sql, Does.Contain("FROM [Users] AS target"));
-            Assert.That(sql, Does.Contain("NOT EXISTS ("));
-            Assert.That(sql, Does.Contain("SELECT 1 FROM [#Seen] AS seen"));
-            Assert.That(sql, Does.Contain("target.[Id] = seen.[Id]"));
-        });
-    }
-
-    [Test]
-    public void BuildDeleteReconciliation_WithDeletedColumn_EmitsSoftDelete()
-    {
-        //Arrange
-        List<string> keys = new List<string> { "Id" };
-
-        //Act
-        string sql = SqlStatementBuilder.BuildDeleteReconciliation("Users", "#Seen", keys, "Deleted");
-
-        //Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(sql, Does.StartWith("UPDATE target"));
-            Assert.That(sql, Does.Contain("SET target.[Deleted] = SYSUTCDATETIME()"));
-            // Already-deleted rows must not be re-stamped on every run.
-            Assert.That(sql, Does.Contain("WHERE target.[Deleted] IS NULL"));
-            Assert.That(sql, Does.Not.Contain("DELETE target"));
-        });
-    }
-
-    [Test]
-    public void BuildDeleteCandidateCount_ReturnsTotalAndCandidateColumns()
-    {
-        //Arrange
-        List<string> keys = new List<string> { "Id" };
-
-        //Act
-        string sql = SqlStatementBuilder.BuildDeleteCandidateCount("Users", "#Seen", keys, null);
-
-        //Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(sql, Does.Contain("COUNT_BIG(*) AS TotalRows"));
-            Assert.That(sql, Does.Contain("AS DeleteCandidates"));
-            Assert.That(sql, Does.Contain("FROM [Users] AS target"));
-        });
-    }
-
-    [Test]
-    public void BuildDeleteCandidateCount_WithDeletedColumn_ExcludesAlreadyDeletedRows()
-    {
-        //Arrange
-        List<string> keys = new List<string> { "Id" };
-
-        //Act
-        string sql = SqlStatementBuilder.BuildDeleteCandidateCount("Users", "#Seen", keys, "Deleted");
-
-        //Assert
-        Assert.That(sql, Does.Contain("WHERE target.[Deleted] IS NULL"));
     }
 
     [Test]
