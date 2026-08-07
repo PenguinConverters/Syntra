@@ -171,26 +171,31 @@ public class Property
     }
 
     /// <summary>
-    /// Infers the smallest integer SQL type that can hold all observed values.
+    /// Infers the integer SQL type for the observed values, widening but never narrowing.
     /// </summary>
+    /// <remarks>
+    /// Deliberately does <em>not</em> return <see cref="SqlColumnType.TinyInt"/> or
+    /// <see cref="SqlColumnType.SmallInt"/>, even when every observed value would fit.
+    ///
+    /// Inference runs over a sample, but the generated <c>CREATE TABLE</c> is used against real
+    /// data for the lifetime of the table. Narrowing to the sample makes the schema fail the
+    /// first time reality exceeds it: profile 10,000 users whose employee numbers happen to fall
+    /// in 1-200 and a <c>TINYINT</c> column overflows the moment number 4711 arrives. The saving
+    /// is three bytes per row; the cost is a failed sync in production.
+    ///
+    /// So the floor is <see cref="SqlColumnType.Int"/>, and the only widening is to
+    /// <see cref="SqlColumnType.BigInt"/> when a value genuinely exceeds <see cref="int"/> range.
+    /// Both narrower members remain on the enum: they are valid for hand-authored schema, they
+    /// are simply not inferred from a sample.
+    /// </remarks>
     private SqlColumnType InferIntegerType()
     {
-        if (_minIntValue >= 0 && _maxIntValue <= 255)
+        if (_minIntValue < int.MinValue || _maxIntValue > int.MaxValue)
         {
-            return SqlColumnType.TinyInt;
+            return SqlColumnType.BigInt;
         }
 
-        if (_minIntValue >= short.MinValue && _maxIntValue <= short.MaxValue)
-        {
-            return SqlColumnType.SmallInt;
-        }
-
-        if (_minIntValue >= int.MinValue && _maxIntValue <= int.MaxValue)
-        {
-            return SqlColumnType.Int;
-        }
-
-        return SqlColumnType.BigInt;
+        return SqlColumnType.Int;
     }
 
     /// <summary>

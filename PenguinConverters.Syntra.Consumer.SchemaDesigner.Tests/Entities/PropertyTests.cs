@@ -28,6 +28,97 @@ public class PropertyTests
     }
 
     [Test]
+    public void InferType_SmallPositiveValues_DoesNotNarrowToTinyInt()
+    {
+        //Arrange - every observed value fits TINYINT, but the sample is not the domain.
+        Property property = new Property("EmployeeNumber");
+        property.Observe(1);
+        property.Observe(200);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.Int),
+            "narrowing to the sample overflows the first time a larger value arrives");
+    }
+
+    [Test]
+    public void InferType_ValuesWithinShortRange_DoesNotNarrowToSmallInt()
+    {
+        //Arrange
+        Property property = new Property("Floor");
+        property.Observe(-5);
+        property.Observe(120);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.Int));
+    }
+
+    [Test]
+    public void InferType_ValueAboveIntRange_WidensToBigInt()
+    {
+        //Arrange
+        Property property = new Property("Ticks");
+        property.Observe(1L);
+        property.Observe(long.MaxValue);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.BigInt));
+    }
+
+    [Test]
+    public void InferType_ValueBelowIntRange_WidensToBigInt()
+    {
+        //Arrange
+        Property property = new Property("Offset");
+        property.Observe(long.MinValue);
+        property.Observe(0L);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.BigInt));
+    }
+
+    [Test]
+    public void InferType_ExactlyIntBoundaries_StaysInt()
+    {
+        //Arrange
+        Property property = new Property("Bounded");
+        property.Observe(int.MinValue);
+        property.Observe(int.MaxValue);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.Int));
+    }
+
+    [Test]
+    public void InferType_ByteValues_StillInferInt()
+    {
+        //Arrange - the CLR type observed is byte, which previously drove TINYINT.
+        Property property = new Property("Level");
+        property.Observe((byte)3);
+        property.Observe((byte)9);
+
+        //Act
+        Column column = property.ToColumn();
+
+        //Assert
+        Assert.That(column.SqlType, Is.EqualTo(SqlColumnType.Int));
+    }
+
+    [Test]
     public void InferType_Boolean_ReturnsBool()
     {
         //Arrange
