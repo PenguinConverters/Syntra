@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Edge]
 (
-    [S1EdgeId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1EdgeId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1EdgeIdentity] INT IDENTITY(0,1) NOT NULL,
     [NodeToIdentifier] VARCHAR(256) NOT NULL,
     [NodeFromIdentifier] VARCHAR(256) NOT NULL,

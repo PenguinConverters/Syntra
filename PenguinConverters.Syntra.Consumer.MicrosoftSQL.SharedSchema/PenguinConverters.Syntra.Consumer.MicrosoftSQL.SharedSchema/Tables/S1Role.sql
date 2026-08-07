@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Role]
 (
-    [S1RoleId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1RoleId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1RoleIdentity] INT IDENTITY(0,1) NOT NULL,
     [Value] VARCHAR(256) NOT NULL,
     [Display] NVARCHAR(256) NULL,

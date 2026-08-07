@@ -25,6 +25,11 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    -- NEWID() rather than NEWSEQUENTIALID(): the latter is only legal as a DEFAULT
+    -- constraint on a UNIQUEIDENTIFIER column and cannot be called in an expression.
+    -- The id is generated here so it can be returned to the caller, which means rows
+    -- created through this procedure do not benefit from the sequential default on
+    -- [S1Transaction].[S1TransactionId].
     DECLARE @S1TransactionId UNIQUEIDENTIFIER = NEWID();
 
     -- Validate the operation exists

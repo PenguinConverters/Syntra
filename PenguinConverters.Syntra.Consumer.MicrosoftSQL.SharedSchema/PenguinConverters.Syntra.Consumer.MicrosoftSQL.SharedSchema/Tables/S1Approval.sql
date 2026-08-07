@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Approval]
 (
-    [S1ApprovalId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1ApprovalId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1ApprovalIdentity] INT IDENTITY(0,1) NOT NULL,
     [S1ApprovalPredecessorId] UNIQUEIDENTIFIER NULL REFERENCES [dbo].[S1Approval]([S1ApprovalId]),
     [ApproverSelectionSql] NVARCHAR(MAX) NULL,
