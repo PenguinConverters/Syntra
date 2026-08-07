@@ -101,7 +101,7 @@ public class Provider : Core.Source.Provider
         // Full sync / delta changed objects
         // In a real implementation, this streams the paged LDAP search from
         // PenguinConverters.Syntra.ActiveDirectory.Connection and yields an Entity per result:
-        //   await foreach (Dictionary<string, object?> entry in connection.RetrieveAsync(
+        //   await foreach (IDictionary<string, object?> entry in connection.RetrieveAsync(
         //       ldapFilter, propertyList, _configuration.BaseDN, false, cancellationToken))
         //   {
         //       yield return CreateEntity(entry);
@@ -147,7 +147,7 @@ public class Provider : Core.Source.Provider
     /// <c>true</c> if a domain controller matching the previous state was found;
     /// <c>false</c> if a new DC was selected and the state was reset.
     /// </returns>
-    public bool TryGetPreferredLdapServer(out Dictionary<string, object>? serverInfo)
+    public bool TryGetPreferredLdapServer(out IDictionary<string, object>? serverInfo)
     {
         serverInfo = null;
 

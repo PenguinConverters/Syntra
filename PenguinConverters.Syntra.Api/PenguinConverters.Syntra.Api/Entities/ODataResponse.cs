@@ -66,5 +66,5 @@ public sealed class ODataResponse
     /// Gets or sets the collection of result entities as dynamic dictionaries.
     /// </summary>
     [JsonPropertyName("value")]
-    public IReadOnlyList<Dictionary<string, object?>> Value { get; set; } = [];
+    public IReadOnlyList<IDictionary<string, object?>> Value { get; set; } = [];
 }
