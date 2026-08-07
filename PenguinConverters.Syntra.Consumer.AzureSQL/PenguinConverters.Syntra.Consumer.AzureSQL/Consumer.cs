@@ -164,24 +164,50 @@ public class Consumer : Core.Target.Consumer
 
         await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        string synchronizationName = _configuration.TableName!;
+        // The staging table identifies the synchronization configuration, not the destination:
+        // a full and a delta sync of the same entity target one table but must not share staging.
+        string synchronizationName = string.IsNullOrWhiteSpace(_configuration.ConfigurationName)
+            ? _configuration.TableName!
+            : _configuration.ConfigurationName;
+
         _stagingTable = SqlStatementBuilder.BuildTempTableName(synchronizationName);
         _seenKeysTable = SqlStatementBuilder.BuildTempTableName(synchronizationName + "_Keys");
 
+        // Types come from the live target table rather than from configured strings, so staged
+        // values match the destination exactly and the MERGE performs no implicit conversion.
+        IDictionary<string, string> targetSchema =
+            await ReadTargetSchemaAsync(cancellationToken).ConfigureAwait(false);
+
+        if (targetSchema.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"Target table '{_configuration.TableName}' was not found, or exposes no insertable columns.");
+        }
+
         _columnOrder = _configuration.Columns!.Keys.ToList();
 
+        List<string> missing = _columnOrder
+            .Concat(_configuration.PrimaryKeys!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(name => !targetSchema.ContainsKey(name))
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            // Computed and rowversion columns are filtered out of the schema read, so they land
+            // here too. Say so, rather than claiming the column does not exist.
+            throw new InvalidOperationException(
+                $"Configured column(s) missing or not insertable on target table " +
+                $"'{_configuration.TableName}': {string.Join(", ", missing)}. " +
+                "Computed and rowversion columns cannot be written and must not be configured.");
+        }
+
         List<KeyValuePair<string, string>> stagingColumns = _columnOrder
-            .Select(name => new KeyValuePair<string, string>(
-                name,
-                _configuration.Columns![name].SqlType ?? "NVARCHAR(MAX)"))
+            .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
             .ToList();
 
         List<KeyValuePair<string, string>> keyColumns = _configuration.PrimaryKeys!
-            .Select(name => new KeyValuePair<string, string>(
-                name,
-                _configuration.Columns!.TryGetValue(name, out ColumnDefinition? definition)
-                    ? definition.SqlType ?? "NVARCHAR(450)"
-                    : "NVARCHAR(450)"))
+            .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
             .ToList();
 
         await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_stagingTable), cancellationToken).ConfigureAwait(false);
@@ -193,6 +219,46 @@ public class Consumer : Core.Target.Consumer
         _seenKeyBatch = CreateBatchTable(_configuration.PrimaryKeys!);
 
         Logger.LogDebug("Staging tables '{Staging}' and '{Keys}' created.", _stagingTable, _seenKeysTable);
+    }
+
+    /// <summary>
+    /// Reads the target table's insertable columns and their types from <c>sys.columns</c>.
+    /// </summary>
+    /// <returns>A case-insensitive map of column name to rendered SQL type.</returns>
+    private async Task<IDictionary<string, string>> ReadTargetSchemaAsync(CancellationToken cancellationToken)
+    {
+        Dictionary<string, string> schema = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        await using SqlCommand command = CreateCommand(SqlStatementBuilder.BuildColumnSchemaQuery());
+
+        // Parameterised, so the table name is never interpolated into the query text.
+        // 776 is the widest value OBJECT_ID accepts (a three-part name).
+        command.Parameters.Add(new SqlParameter("@TableName", SqlDbType.NVarChar, 776)
+        {
+            Value = _configuration!.TableName
+        });
+
+        await using SqlDataReader reader = await command
+            .ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            string columnName = reader.GetString(0);
+            string typeName = reader.GetString(1);
+            short maxLength = reader.GetInt16(2);
+            byte precision = reader.GetByte(3);
+            byte scale = reader.GetByte(4);
+
+            schema[columnName] = SqlStatementBuilder.RenderSqlType(typeName, maxLength, precision, scale);
+        }
+
+        Logger.LogDebug(
+            "Read {Count} insertable column(s) from target table '{TableName}'.",
+            schema.Count,
+            _configuration.TableName);
+
+        return schema;
     }
 
     /// <summary>

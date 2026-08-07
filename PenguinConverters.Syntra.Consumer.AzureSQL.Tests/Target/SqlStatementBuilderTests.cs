@@ -308,6 +308,146 @@ public class SqlStatementBuilderTests
     }
 
     [Test]
+    public void BuildColumnSchemaQuery_ParameterisesTableNameAndResolvesBaseType()
+    {
+        //Arrange
+
+        //Act
+        string sql = SqlStatementBuilder.BuildColumnSchemaQuery();
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.Contain("OBJECT_ID(@TableName)"), "table name must be a parameter");
+            // Alias types resolve to a name that does not exist in tempdb, where the staging
+            // table is created, so the base system type is required.
+            Assert.That(sql, Does.Contain("TYPE_NAME(c.system_type_id)"));
+            Assert.That(sql, Does.Not.Contain("user_type_id"));
+            Assert.That(sql, Does.Contain("c.is_computed = 0"));
+            Assert.That(sql, Does.Contain("<> 'timestamp'"));
+            Assert.That(sql, Does.Contain("ORDER BY c.column_id"));
+        });
+    }
+
+    [TestCase("int", (short)4, (byte)10, (byte)0, "INT")]
+    [TestCase("bigint", (short)8, (byte)19, (byte)0, "BIGINT")]
+    [TestCase("bit", (short)1, (byte)1, (byte)0, "BIT")]
+    [TestCase("uniqueidentifier", (short)16, (byte)0, (byte)0, "UNIQUEIDENTIFIER")]
+    [TestCase("date", (short)3, (byte)10, (byte)0, "DATE")]
+    [TestCase("xml", (short)-1, (byte)0, (byte)0, "XML")]
+    public void RenderSqlType_FixedWidthTypes_HaveNoSpecifier(
+        string typeName, short maxLength, byte precision, byte scale, string expected)
+    {
+        //Arrange
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType(typeName, maxLength, precision, scale);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RenderSqlType_NationalCharTypes_ConvertBytesToCharacters()
+    {
+        //Arrange — sys.columns.max_length is bytes; NVARCHAR stores 2 bytes per character.
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType("nvarchar", 510, 0, 0);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo("NVARCHAR(255)"));
+    }
+
+    [Test]
+    public void RenderSqlType_NonNationalCharTypes_UseBytesDirectly()
+    {
+        //Arrange
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType("varchar", 255, 0, 0);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo("VARCHAR(255)"));
+    }
+
+    [TestCase("nvarchar", "NVARCHAR(MAX)")]
+    [TestCase("varchar", "VARCHAR(MAX)")]
+    [TestCase("varbinary", "VARBINARY(MAX)")]
+    public void RenderSqlType_NegativeMaxLength_RendersMax(string typeName, string expected)
+    {
+        //Arrange
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType(typeName, -1, 0, 0);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RenderSqlType_Decimal_CarriesPrecisionAndScale()
+    {
+        //Arrange
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType("decimal", 9, 18, 4);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo("DECIMAL(18,4)"));
+    }
+
+    [TestCase("datetime2", (byte)7, "DATETIME2(7)")]
+    [TestCase("datetimeoffset", (byte)3, "DATETIMEOFFSET(3)")]
+    [TestCase("time", (byte)0, "TIME(0)")]
+    public void RenderSqlType_TemporalTypes_CarryScale(string typeName, byte scale, string expected)
+    {
+        //Arrange
+
+        //Act
+        string rendered = SqlStatementBuilder.RenderSqlType(typeName, 8, 0, scale);
+
+        //Assert
+        Assert.That(rendered, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void RenderSqlType_RoundTripsIntoCreateTempTable()
+    {
+        //Arrange — the rendered type must be valid where it is actually used.
+        List<KeyValuePair<string, string>> columns = new List<KeyValuePair<string, string>>
+        {
+            new KeyValuePair<string, string>(
+                "Name", SqlStatementBuilder.RenderSqlType("nvarchar", 510, 0, 0)),
+            new KeyValuePair<string, string>(
+                "Amount", SqlStatementBuilder.RenderSqlType("decimal", 9, 18, 4))
+        };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildCreateTempTable("#Stage", columns);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.Contain("[Name] NVARCHAR(255)"));
+            Assert.That(sql, Does.Contain("[Amount] DECIMAL(18,4)"));
+        });
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    public void RenderSqlType_MissingTypeName_Throws(string? typeName)
+    {
+        //Arrange
+
+        //Act
+        TestDelegate action = () => SqlStatementBuilder.RenderSqlType(typeName!, 4, 0, 0);
+
+        //Assert
+        Assert.Throws<ArgumentException>(action);
+    }
+
+    [Test]
     public void BuildTruncate_QuotesTableName()
     {
         //Arrange

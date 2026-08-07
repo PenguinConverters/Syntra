@@ -41,6 +41,19 @@ public class Configuration
     public string? TableName { get; set; }
 
     /// <summary>
+    /// Gets or sets the unique name of this synchronization configuration, for example
+    /// <c>ActiveDirectory.groups2AzureSQL.ADGroup_DELTA</c>.
+    /// </summary>
+    /// <remarks>
+    /// The staging table name is derived from this, so it identifies the run rather than the
+    /// destination. Several configurations may target the same table — a full and a delta sync of
+    /// the same entity, or two sources feeding one table — and each needs its own staging area.
+    /// Only one run of a given configuration is expected at a time, which is what makes the name
+    /// safe to reuse. Falls back to <see cref="TableName"/> when not supplied.
+    /// </remarks>
+    public string? ConfigurationName { get; set; }
+
+    /// <summary>
     /// Gets or sets the column definitions for the target table.
     /// Keys are column names, values define column metadata.
     /// </summary>
@@ -120,6 +133,13 @@ public class ColumnDefinition
     /// <summary>
     /// Gets or sets the SQL data type for this column (e.g., "nvarchar(255)", "int").
     /// </summary>
+    /// <remarks>
+    /// Advisory only. The staging table is built from the target table's live definition in
+    /// <c>sys.columns</c>, not from this value, so staged types always match the destination
+    /// exactly and the MERGE performs no implicit conversion. A stale or wrong value here can no
+    /// longer cause a type mismatch at run time. Retained for documentation and for tooling that
+    /// generates a target table from the same configuration.
+    /// </remarks>
     public string? SqlType { get; set; }
 
     /// <summary>

@@ -242,6 +242,92 @@ internal static class SqlStatementBuilder
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Returns the query that reads the target table's column definitions from the live database.
+    /// The staging table is built from this rather than from configured type strings, so staged
+    /// values always match the destination type exactly and the MERGE performs no implicit
+    /// conversion.
+    /// </summary>
+    /// <remarks>
+    /// The table name is passed as the <c>@TableName</c> parameter to <c>OBJECT_ID</c>, so this
+    /// query carries no interpolated identifier at all.
+    ///
+    /// <c>TYPE_NAME(system_type_id)</c> is used deliberately in preference to joining
+    /// <c>sys.types</c> on <c>user_type_id</c>. The latter returns the <em>declared</em> type,
+    /// which for an alias type (<c>CREATE TYPE</c>) is a name defined in the user database. The
+    /// staging table is created in <c>tempdb</c>, where that name does not resolve, so the
+    /// <c>CREATE TABLE</c> would fail. Resolving to the base system type keeps staging valid
+    /// regardless of alias types on the target.
+    ///
+    /// Computed and <c>rowversion</c> columns are excluded: neither can be inserted, so a MERGE
+    /// that tried to write them would fail.
+    /// </remarks>
+    /// <returns>The parameterised schema query.</returns>
+    public static string BuildColumnSchemaQuery()
+    {
+        return """
+            SELECT c.name                          AS ColumnName,
+                   TYPE_NAME(c.system_type_id)     AS TypeName,
+                   c.max_length                    AS MaxLength,
+                   c.precision                     AS Precision,
+                   c.scale                         AS Scale
+              FROM sys.columns AS c
+             WHERE c.object_id = OBJECT_ID(@TableName)
+               AND c.is_computed = 0
+               AND TYPE_NAME(c.system_type_id) <> 'timestamp'
+             ORDER BY c.column_id;
+            """;
+    }
+
+    /// <summary>
+    /// Renders a SQL type declaration from <c>sys.columns</c> metadata.
+    /// </summary>
+    /// <param name="typeName">The type name from <c>sys.types</c>.</param>
+    /// <param name="maxLength">
+    /// The <c>max_length</c> value, in bytes; <c>-1</c> denotes a MAX type.
+    /// </param>
+    /// <param name="precision">The numeric precision.</param>
+    /// <param name="scale">The numeric or temporal scale.</param>
+    /// <returns>A type declaration such as <c>NVARCHAR(255)</c> or <c>DECIMAL(18,4)</c>.</returns>
+    public static string RenderSqlType(string typeName, short maxLength, byte precision, byte scale)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+            throw new ArgumentException("Type name must not be null or empty.", nameof(typeName));
+
+        string type = typeName.ToUpperInvariant();
+
+        switch (type)
+        {
+            case "NVARCHAR":
+            case "NCHAR":
+                // max_length is in bytes; national types store two bytes per character.
+                return maxLength < 0 ? $"{type}(MAX)" : $"{type}({maxLength / 2})";
+
+            case "VARCHAR":
+            case "CHAR":
+            case "VARBINARY":
+            case "BINARY":
+                return maxLength < 0 ? $"{type}(MAX)" : $"{type}({maxLength})";
+
+            case "DECIMAL":
+            case "NUMERIC":
+                return $"{type}({precision},{scale})";
+
+            case "DATETIME2":
+            case "DATETIMEOFFSET":
+            case "TIME":
+                return $"{type}({scale})";
+
+            case "FLOAT":
+                return $"{type}({precision})";
+
+            default:
+                // Fixed-width types (INT, BIGINT, BIT, UNIQUEIDENTIFIER, DATE, MONEY, ...)
+                // carry no length or precision specifier.
+                return type;
+        }
+    }
+
     /// <summary>Builds a <c>TRUNCATE TABLE</c> for the staging table.</summary>
     /// <param name="tempTableName">The staging table name.</param>
     /// <returns>The <c>TRUNCATE TABLE</c> statement.</returns>
