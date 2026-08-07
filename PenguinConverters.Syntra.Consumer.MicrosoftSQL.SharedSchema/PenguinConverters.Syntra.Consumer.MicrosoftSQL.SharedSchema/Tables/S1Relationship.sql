@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Relationship]
 (
-    [S1RelationshipId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1RelationshipId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1RelationshipIdentity] INT IDENTITY(0,1) NOT NULL,
     [SubjectId] VARCHAR(128) NOT NULL,
     [SubjectTableId] UNIQUEIDENTIFIER NOT NULL,

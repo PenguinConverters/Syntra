@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1ApprovalRequest]
 (
-    [S1ApprovalRequestId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1ApprovalRequestId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1ApprovalRequestIdentity] INT IDENTITY(0,1) NOT NULL,
     [S1TransactionId] UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[S1Transaction]([S1TransactionId]),
     [S1ApprovalStateId] UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[S1ApprovalState]([S1ApprovalStateId]),

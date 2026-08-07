@@ -15,7 +15,7 @@ BEGIN
 
     SET @Script = 'CREATE TABLE [dbo].[' + @TableName + ']' + CHAR(13) + CHAR(10)
         + '(' + CHAR(13) + CHAR(10)
-        + '    [' + @Prefix + @TableName + 'Id] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,' + CHAR(13) + CHAR(10)
+        + '    [' + @Prefix + @TableName + 'Id] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,' + CHAR(13) + CHAR(10)
         + '    [' + @Prefix + @TableName + 'Identity] INT IDENTITY(0,1) NOT NULL,' + CHAR(13) + CHAR(10)
         + '    -- Add custom columns here' + CHAR(13) + CHAR(10)
         + '    [' + @Prefix + @TableName + 'Inserted] DATETIME2 NOT NULL DEFAULT GETUTCDATE(),' + CHAR(13) + CHAR(10)

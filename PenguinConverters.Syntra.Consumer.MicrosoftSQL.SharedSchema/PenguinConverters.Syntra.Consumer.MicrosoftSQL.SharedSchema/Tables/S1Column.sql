@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Column]
 (
-    [S1ColumnId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1ColumnId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1ColumnIdentity] INT IDENTITY(0,1) NOT NULL,
     [TableName] VARCHAR(128) NOT NULL,
     [ColumnName] VARCHAR(128) NOT NULL,

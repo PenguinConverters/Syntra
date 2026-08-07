@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1MessagingMessageRecipient]
 (
-    [S1MessagingMessageRecipientId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1MessagingMessageRecipientId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1MessagingMessageRecipientIdentity] INT IDENTITY(0,1) NOT NULL,
     [S1MessagingMessageId] UNIQUEIDENTIFIER NOT NULL REFERENCES [dbo].[S1MessagingMessage]([S1MessagingMessageId]),
     [Recipient] VARCHAR(256) NOT NULL,

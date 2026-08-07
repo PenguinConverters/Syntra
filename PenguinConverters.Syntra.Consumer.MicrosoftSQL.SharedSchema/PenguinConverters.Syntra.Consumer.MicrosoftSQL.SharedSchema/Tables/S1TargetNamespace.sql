@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1TargetNamespace]
 (
-    [S1TargetNamespaceId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1TargetNamespaceId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1TargetNamespaceIdentity] INT IDENTITY(0,1) NOT NULL,
     [Name] VARCHAR(128) NOT NULL,
     [DisplayName] NVARCHAR(256) NULL,

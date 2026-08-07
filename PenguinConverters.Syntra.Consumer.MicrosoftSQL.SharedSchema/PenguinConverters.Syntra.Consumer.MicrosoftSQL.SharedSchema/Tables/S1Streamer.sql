@@ -5,7 +5,7 @@
 -- =============================================
 CREATE TABLE [dbo].[S1Streamer]
 (
-    [S1StreamerId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    [S1StreamerId] UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
     [S1StreamerIdentity] INT IDENTITY(0,1) NOT NULL,
     [Name] VARCHAR(128) NOT NULL,
     [Description] NVARCHAR(512) NULL,
