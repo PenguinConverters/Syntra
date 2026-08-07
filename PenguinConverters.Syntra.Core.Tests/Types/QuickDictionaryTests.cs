@@ -140,18 +140,21 @@ public class QuickDictionaryTests
     }
 
     [Test]
-    public void DefaultConstructor_AllocatesNoBackingArray()
+    public void DefaultConstructor_AllocatesBackingArrayOnFirstInsertOnly()
     {
         //Arrange
+        QuickDictionary dictionary = new QuickDictionary();
+        int capacityWhileEmpty = dictionary.Capacity;
 
         //Act
-        QuickDictionary dictionary = new QuickDictionary();
+        dictionary.Add("first", 1);
 
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(dictionary.Capacity, Is.Zero);
-            Assert.That(dictionary.Count, Is.Zero);
+            Assert.That(capacityWhileEmpty, Is.Zero);
+            Assert.That(dictionary.Capacity, Is.GreaterThan(0));
+            Assert.That(dictionary.Count, Is.EqualTo(1));
         });
     }
 
@@ -225,9 +228,10 @@ public class QuickDictionaryTests
     {
         //Arrange
         QuickDictionary dictionary = new QuickDictionary();
+        dictionary.Add("present", 1);
 
         //Act
-        TestDelegate action = () => { object? unused = dictionary["absent"]; };
+        TestDelegate action = () => _ = dictionary["absent"];
 
         //Assert
         Assert.Throws<KeyNotFoundException>(action);
