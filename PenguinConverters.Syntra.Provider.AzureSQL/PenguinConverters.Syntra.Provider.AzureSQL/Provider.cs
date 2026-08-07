@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -48,7 +49,9 @@ public class Provider : Core.Source.Provider
     }
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -67,8 +70,12 @@ public class Provider : Core.Source.Provider
         //   Delta sync: SELECT {properties} FROM {TableName} WHERE {OffsetColumn} > @lastOffset
         //               [AND {WhereClause}]
 
-        // Execute query via SqlDataReader, yield Entity objects per row
+        // Execute the query via SqlDataReader and yield Entity objects per row:
+        //   while (await reader.ReadAsync(cancellationToken)) yield return entity;
         // Track the maximum OffsetColumn value seen
+
+        // Placeholder for the awaited SqlDataReader that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         // On success, store the new offset as metadata:
         // RawMetadata = Encoding.UTF8.GetBytes(maxOffset.ToString("O"));

@@ -14,9 +14,10 @@ public interface IProvider
     byte[]? Metadata { get; }
 
     /// <summary>
-    /// Retrieves entities from the source system, projecting only the specified properties.
+    /// Asynchronously streams entities from the source system, projecting only the specified properties.
     /// </summary>
     /// <param name="properties">The property names to retrieve for each entity.</param>
-    /// <returns>An enumerable sequence of entities from the source.</returns>
-    IEnumerable<IEntity> Retrieve(IEnumerable<string> properties);
+    /// <param name="cancellationToken">A token to signal cancellation of the retrieval.</param>
+    /// <returns>An asynchronous stream of entities from the source.</returns>
+    IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default);
 }

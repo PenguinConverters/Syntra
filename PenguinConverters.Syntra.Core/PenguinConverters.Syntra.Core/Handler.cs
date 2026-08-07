@@ -55,10 +55,12 @@ public class Handler
     public bool HadErrors { get; private set; }
 
     /// <summary>
-    /// Executes the full synchronization pipeline:
+    /// Asynchronously executes the full synchronization pipeline:
     /// builds the provider and consumer, runs synchronization, and finalizes.
     /// </summary>
-    public void Synchronize()
+    /// <param name="cancellationToken">A token to signal cancellation of the pipeline.</param>
+    /// <returns>A task that completes when the pipeline has finished.</returns>
+    public async Task SynchronizeAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Starting synchronization. Source: {Source}, Target: {Target}, Delta: {Delta}",
             _configuration.Source.Type, _configuration.Target.Type, _configuration.Delta);
@@ -69,7 +71,7 @@ public class Handler
         try
         {
             _logger.LogInformation("Running synchronization pipeline.");
-            consumer.Synchronize(provider);
+            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -82,7 +84,7 @@ public class Handler
             try
             {
                 _logger.LogInformation("Finalizing synchronization pipeline.");
-                consumer.Finalize(provider);
+                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

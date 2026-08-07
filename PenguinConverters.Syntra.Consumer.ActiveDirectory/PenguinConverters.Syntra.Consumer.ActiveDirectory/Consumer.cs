@@ -42,7 +42,7 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
     }
 
     /// <inheritdoc />
-    public override void Synchronize(IProvider provider)
+    public override async Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -57,22 +57,24 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
 
         IEnumerable<string> properties = _configuration.Properties?.Keys ?? Enumerable.Empty<string>();
 
-        foreach (IEntity entity in provider.Retrieve(properties))
+        await foreach (IEntity entity in provider.RetrieveAsync(properties, cancellationToken).ConfigureAwait(false))
         {
-            UpdateEntity(entity);
+            await UpdateEntityAsync(entity, cancellationToken).ConfigureAwait(false);
         }
 
         Logger.LogInformation("Active Directory synchronization completed.");
     }
 
     /// <summary>
-    /// Updates a single entity in Active Directory. Searches for existing objects
+    /// Asynchronously updates a single entity in Active Directory. Searches for existing objects
     /// using the configured LDAP filter and primary key attributes. Creates new
     /// objects when not found, or modifies existing object attributes.
     /// Tracks composite keys for deletion reconciliation in full sync mode.
     /// </summary>
     /// <param name="entity">The entity to synchronize to Active Directory.</param>
-    public void UpdateEntity(IEntity entity)
+    /// <param name="cancellationToken">A token to signal cancellation of the update.</param>
+    /// <returns>A task that completes when the entity has been written to the directory.</returns>
+    public async ValueTask UpdateEntityAsync(IEntity entity, CancellationToken cancellationToken = default)
     {
         if (_configuration?.Properties is null) return;
 
@@ -94,6 +96,9 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
 
             // 5. Cache filter -> DN mapping in _filtersFound to avoid duplicate searches
 
+            // Placeholder for the awaited LDAP search and add/modify requests.
+            await Task.CompletedTask.ConfigureAwait(false);
+
             Logger.LogTrace("Updated entity in Active Directory: {Identifier}", entity.Identifier);
         }
         catch (Exception ex)
@@ -104,7 +109,7 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
     }
 
     /// <inheritdoc />
-    public override void Finalize(IProvider provider)
+    public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         if (_configuration is null) return;
 
@@ -112,20 +117,22 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
 
         if (!_configuration.Delta)
         {
-            ReconcileDeletions(provider);
+            await ReconcileDeletionsAsync(provider, cancellationToken).ConfigureAwait(false);
         }
 
         Logger.LogInformation("Active Directory finalization completed.");
     }
 
     /// <summary>
-    /// Reconciles deletions during full synchronization. Compares composite keys
+    /// Asynchronously reconciles deletions during full synchronization. Compares composite keys
     /// tracked during sync against all existing objects in the target OU.
     /// Enforces configured thresholds before executing deletions to prevent
     /// accidental mass removal of AD objects.
     /// </summary>
     /// <param name="provider">The source provider to check for errors.</param>
-    private void ReconcileDeletions(IProvider provider)
+    /// <param name="cancellationToken">A token to signal cancellation of the reconciliation.</param>
+    /// <returns>A task that completes when reconciliation has finished.</returns>
+    private async Task ReconcileDeletionsAsync(IProvider provider, CancellationToken cancellationToken)
     {
         if (_configuration is null || HadErrors) return;
 
@@ -148,6 +155,9 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
         // 5. For multi-valued attributes with PrimaryKey = true:
         //    Use AttributeModificationDelete to remove specific values.
         //    For regular objects: use DeleteRequest or move to deleted OU.
+
+        // Placeholder for the awaited LDAP enumeration and delete requests.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         Logger.LogTrace("Deletion reconciliation completed for '{BaseDN}'.", _configuration.BaseDN);
     }

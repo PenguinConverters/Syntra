@@ -18,6 +18,7 @@ public class Worker : IHostedService, IDisposable
     private readonly ILogger<Worker> _logger;
     private readonly List<ScheduledJob> _jobs = [];
     private readonly string _configurationDirectory;
+    private readonly CancellationTokenSource _stoppingTokenSource = new();
     private bool _disposed;
 
     /// <summary>
@@ -63,6 +64,8 @@ public class Worker : IHostedService, IDisposable
         {
             job.Timer?.Change(Timeout.Infinite, Timeout.Infinite);
         }
+
+        _stoppingTokenSource.Cancel();
 
         return Task.CompletedTask;
     }
@@ -148,12 +151,14 @@ public class Worker : IHostedService, IDisposable
     /// and schedules the next execution.
     /// </summary>
     /// <param name="state">The <see cref="ScheduledJob"/> associated with the timer.</param>
-    private void OnTimerElapsed(object state)
+    private async void OnTimerElapsed(object state)
     {
         ScheduledJob job = (ScheduledJob)state;
 
         // Disable the timer to prevent re-entry
         job.Timer?.Change(Timeout.Infinite, Timeout.Infinite);
+
+        bool leaseAcquired = false;
 
         try
         {
@@ -164,11 +169,17 @@ public class Worker : IHostedService, IDisposable
                 return;
             }
 
+            leaseAcquired = true;
+
             _logger.LogInformation("Job '{Name}' starting synchronization", job.Name);
 
-            ExecuteSynchronization(job);
+            await ExecuteSynchronizationAsync(job, _stoppingTokenSource.Token).ConfigureAwait(false);
 
             _logger.LogInformation("Job '{Name}' synchronization completed", job.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Job '{Name}' was cancelled during synchronization", job.Name);
         }
         catch (Exception ex)
         {
@@ -176,16 +187,25 @@ public class Worker : IHostedService, IDisposable
         }
         finally
         {
-            ReleaseLease(job);
-            ScheduleNextRun(job);
+            if (leaseAcquired)
+            {
+                ReleaseLease(job);
+            }
+
+            if (!_stoppingTokenSource.IsCancellationRequested)
+            {
+                ScheduleNextRun(job);
+            }
         }
     }
 
     /// <summary>
-    /// Executes the synchronization workflow for a given job.
+    /// Asynchronously executes the synchronization workflow for a given job.
     /// </summary>
     /// <param name="job">The job to execute.</param>
-    private void ExecuteSynchronization(ScheduledJob job)
+    /// <param name="cancellationToken">A token to signal cancellation of the workflow.</param>
+    /// <returns>A task that completes when the workflow has finished.</returns>
+    private async Task ExecuteSynchronizationAsync(ScheduledJob job, CancellationToken cancellationToken)
     {
         Func<byte[], Type, object> yamlDeserializerFunc = (bytes, type) =>
         {
@@ -217,8 +237,8 @@ public class Worker : IHostedService, IDisposable
         IConsumer consumer = BuildConsumer(config.Target, yamlDeserializerFunc);
 
         // Run synchronization
-        consumer.Synchronize(provider);
-        consumer.Finalize(provider);
+        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
 
         if (consumer.HadErrors)
         {
@@ -342,6 +362,8 @@ public class Worker : IHostedService, IDisposable
             {
                 job.Timer?.Dispose();
             }
+
+            _stoppingTokenSource.Dispose();
             _disposed = true;
         }
     }

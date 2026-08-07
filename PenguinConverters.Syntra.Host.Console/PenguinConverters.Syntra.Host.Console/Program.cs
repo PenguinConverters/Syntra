@@ -18,7 +18,7 @@ public static class Program
     /// </list>
     /// </param>
     /// <returns>Exit code: 0 for success, 1 for failure.</returns>
-    public static int Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         string? configurationPath = null;
         bool schemaMode = false;
@@ -53,11 +53,23 @@ public static class Program
 
         ILogger logger = loggerFactory.CreateLogger(nameof(Worker));
 
+        using CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        System.Console.CancelKeyPress += (_, eventArgs) =>
+        {
+            eventArgs.Cancel = true;
+            cancellationTokenSource.Cancel();
+        };
+
         try
         {
             Worker worker = new Worker(configurationPath, schemaMode, logger);
-            worker.Run();
+            await worker.RunAsync(cancellationTokenSource.Token).ConfigureAwait(false);
             return 0;
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Synchronization was cancelled");
+            return 1;
         }
         catch (Exception ex)
         {

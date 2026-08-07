@@ -70,9 +70,14 @@ public class Configuration
 
 Implement `IProvider` via the base class:
 
+`RetrieveAsync` is an async iterator: yield each entity as it arrives from the source
+instead of collecting the whole result set first. Annotate the token with
+`[EnumeratorCancellation]` so `await foreach` can pass its own token through.
+
 ```csharp
 namespace PenguinConverters.Syntra.Provider.{SystemName};
 
+using System.Runtime.CompilerServices;
 using PenguinConverters.Syntra.Core.Entities;
 using PenguinConverters.Syntra.Core.Source;
 
@@ -82,19 +87,25 @@ public class Provider : Core.Source.Provider, IProvider
 
     public override byte[]? Metadata { get; protected set; }
 
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // 1. Deserialize configuration
         // 2. Connect to source system
         // 3. If delta: apply offset filter from metadata
-        // 4. Yield IEntity for each record
+        // 4. Yield IEntity for each record as each page arrives
         // 5. Update Metadata with new offset
 
         List<string> propertyList = properties.ToList();
 
-        // Example: query an API
+        // Example: page through an API
         // HttpClient client = new HttpClient();
-        // ...
+        // while (nextLink is not null)
+        // {
+        //     HttpResponseMessage response = await client.GetAsync(nextLink, cancellationToken);
+        //     foreach (IEntity entity in ParsePage(response)) yield return entity;
+        // }
 
         yield break;
     }
@@ -160,25 +171,55 @@ public class Consumer : Core.Target.Consumer, IConsumer, ISynchronizable
 {
     public override bool HadErrors { get; protected set; }
 
-    public override void Synchronize(IProvider provider)
+    public override async Task SynchronizeAsync(
+        IProvider provider,
+        CancellationToken cancellationToken = default)
     {
-        IEnumerable<IEntity> entities = provider.Retrieve(GetProperties());
+        IAsyncEnumerable<IEntity> entities = provider.RetrieveAsync(GetProperties(), cancellationToken);
 
-        foreach (IEntity entity in entities)
+        await foreach (IEntity entity in entities)
         {
-            UpdateEntity(entity);
+            await UpdateEntityAsync(entity, cancellationToken);
         }
     }
 
-    public void UpdateEntity(Core.Entities.IEntity entity)
+    public async ValueTask UpdateEntityAsync(
+        Core.Entities.IEntity entity,
+        CancellationToken cancellationToken = default)
     {
         // Write entity to target system
     }
 
-    public override void Finalize(IProvider provider)
+    public override async Task FinalizeAsync(
+        IProvider provider,
+        CancellationToken cancellationToken = default)
     {
         // Reconcile deletions (full sync only)
     }
+}
+```
+
+### Writing in Parallel
+
+When the target system tolerates concurrent writes, drive the provider stream with
+`Parallel.ForEachAsync` instead of `await foreach`. `UpdateEntityAsync` already matches
+the `Func<T, CancellationToken, ValueTask>` body signature, so it can be passed directly.
+Bound the concurrency with the connector's `MaxDegreeOfParallelism` setting and keep any
+shared state in a concurrent collection — this is what `Consumer.AzureSQL` does:
+
+```csharp
+public override async Task SynchronizeAsync(
+    IProvider provider,
+    CancellationToken cancellationToken = default)
+{
+    await Parallel.ForEachAsync(
+        provider.RetrieveAsync(GetProperties(), cancellationToken),
+        new ParallelOptions
+        {
+            MaxDegreeOfParallelism = _configuration.MaxDegreeOfParallelism,
+            CancellationToken = cancellationToken
+        },
+        UpdateEntityAsync);
 }
 ```
 

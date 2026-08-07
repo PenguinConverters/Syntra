@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using PenguinConverters.Syntra.Core.Entities;
@@ -47,7 +48,9 @@ public class Provider : Core.Source.Provider
     }
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -68,6 +71,9 @@ public class Provider : Core.Source.Provider
         // 4. For each record, create an Entity; if DeletedProperty is set,
         //    mark entities where that property indicates deletion as Deleted
         // 5. Track the maximum sys_updated_on value for metadata
+
+        // Placeholder for the awaited ServiceNow page request that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         // On success: RawMetadata = Encoding.UTF8.GetBytes(maxModified.ToString("O"));
 

@@ -39,10 +39,10 @@ public abstract class Consumer : IConsumer
     public virtual bool HadErrors { get; protected set; }
 
     /// <inheritdoc />
-    public abstract void Synchronize(IProvider provider);
+    public abstract Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default);
 
     /// <inheritdoc />
-    public abstract new void Finalize(IProvider provider);
+    public abstract Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sets the logger instance.

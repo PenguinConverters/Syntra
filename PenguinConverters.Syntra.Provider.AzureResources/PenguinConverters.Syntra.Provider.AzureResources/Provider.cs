@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using PenguinConverters.Syntra.Core.Entities;
 using PenguinConverters.Syntra.Provider.AzureResources.Source;
@@ -32,7 +33,9 @@ public class Provider : Core.Source.Provider
     }
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -53,7 +56,10 @@ public class Provider : Core.Source.Provider
         //   /providers/Microsoft.Management/managementGroups?api-version=...
         //   /subscriptions/{subscriptionId}/providers/Microsoft.PolicyInsights/policyStates?api-version=...
 
-        // Page through results using nextLink and yield Entity objects
+        // Page through results using nextLink and yield Entity objects as each page arrives
+
+        // Placeholder for the awaited ARM page request that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         Logger.LogInformation("Azure Resources retrieval completed.");
     }

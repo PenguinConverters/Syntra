@@ -8,7 +8,7 @@ namespace PenguinConverters.Syntra.Provider.Oracle;
 public class Provider : Core.Source.Provider
 {
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException("Oracle provider is not yet implemented.");
     }

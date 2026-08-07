@@ -50,6 +50,20 @@ public class ConsoleWriter
     }
 
     /// <summary>
+    /// Asynchronously flushes the buffered content to the console in a single write operation.
+    /// Clears the buffer after flushing.
+    /// </summary>
+    /// <returns>A task that completes when the buffer has been written.</returns>
+    public async Task FlushAsync()
+    {
+        if (_buffer.Length > 0)
+        {
+            await Console.Out.WriteAsync(_buffer.ToString()).ConfigureAwait(false);
+            _buffer.Clear();
+        }
+    }
+
+    /// <summary>
     /// Returns the current buffered content without flushing.
     /// </summary>
     /// <returns>The buffered text.</returns>

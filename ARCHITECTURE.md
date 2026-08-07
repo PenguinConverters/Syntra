@@ -56,7 +56,9 @@ Syntra uses a **connector-agnostic** design based on the Factory/Builder pattern
 public interface IProvider
 {
     byte[]? Metadata { get; }
-    IEnumerable<IEntity> Retrieve(IEnumerable<string> properties);
+    IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        CancellationToken cancellationToken = default);
 }
 
 public interface IProviderBuilder
@@ -76,8 +78,8 @@ public interface IProviderBuilder
 public interface IConsumer
 {
     bool HadErrors { get; }
-    void Synchronize(IProvider provider);
-    void Finalize(IProvider provider);
+    Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default);
+    Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default);
 }
 
 public interface IConsumerBuilder
@@ -106,17 +108,32 @@ public interface IEntity
 ## Synchronization Modes
 
 ### Full Sync
-1. Provider retrieves **all** entities from source
+1. Provider streams **all** entities from source as an `IAsyncEnumerable<IEntity>`
 2. Consumer processes each entity (INSERT/UPDATE via MERGE)
-3. Consumer runs `Finalize()` which marks unmatched destination rows as deleted
+3. Consumer runs `FinalizeAsync()` which marks unmatched destination rows as deleted
 4. Threshold enforcement prevents accidental mass deletion
 
 ### Delta Sync
 1. Provider receives previous metadata (e.g., USN, DateTime offset, delta token)
-2. Provider retrieves only **changed** entities since last sync
+2. Provider streams only **changed** entities since last sync
 3. Consumer processes changed entities only
-4. `Finalize()` is skipped (no deletion reconciliation)
+4. `FinalizeAsync()` is skipped (no deletion reconciliation)
 5. Updated metadata stored for next run
+
+### Streaming and Parallelism
+The pipeline is asynchronous end to end. `RetrieveAsync` yields entities as pages arrive
+from the source rather than materializing the full result set, and consumers await that
+stream directly. Consumers that support concurrent writes drive the stream with
+`Parallel.ForEachAsync`, bounded by the connector's `MaxDegreeOfParallelism` setting;
+consumers whose target requires ordered or single-threaded writes use `await foreach`.
+A `CancellationToken` flows from the host through the consumer into the provider, so a
+service shutdown or Ctrl+C stops an in-flight sync at the next await point.
+
+The LDAP library is the one place where the underlying SDK does not offer a Task-based API:
+`System.DirectoryServices.Protocols` exposes only the APM `BeginSendRequest`/`EndSendRequest`
+pair. `LdapConnectionExtensions.SendRequestAsync` bridges it to `await` and maps cancellation
+onto `LdapConnection.Abort`. Bind remains synchronous — the SDK has no asynchronous bind, and
+wrapping it would move the block to a thread-pool thread without gaining scalability.
 
 ### Delta Mechanisms by Connector
 | Connector | Delta Key | Mechanism |

@@ -9,8 +9,10 @@ namespace PenguinConverters.Syntra.Core.Target;
 public interface ISynchronizable
 {
     /// <summary>
-    /// Updates or processes a single entity during synchronization on the target side.
+    /// Asynchronously updates or processes a single entity during synchronization on the target side.
     /// </summary>
     /// <param name="entity">The entity to synchronize to the target.</param>
-    void UpdateEntity(IEntity entity);
+    /// <param name="cancellationToken">A token to signal cancellation of the update.</param>
+    /// <returns>A task that completes when the entity has been written to the target.</returns>
+    ValueTask UpdateEntityAsync(IEntity entity, CancellationToken cancellationToken = default);
 }

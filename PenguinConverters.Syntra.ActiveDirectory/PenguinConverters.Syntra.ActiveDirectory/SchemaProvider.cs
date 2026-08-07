@@ -27,14 +27,16 @@ public class SchemaProvider
     }
 
     /// <summary>
-    /// Queries the AD schema to build a dictionary of attribute decoders.
+    /// Asynchronously queries the AD schema to build a dictionary of attribute decoders.
     /// Each decoder maps a raw LDAP byte array to the appropriate .NET type
     /// based on the attribute's <c>oMSyntax</c> and <c>attributeSyntax</c> values.
     /// </summary>
+    /// <param name="cancellationToken">A token to signal cancellation of the schema query.</param>
     /// <returns>
     /// A dictionary mapping attribute names (case-insensitive) to decoder functions.
     /// </returns>
-    public Dictionary<string, Func<byte[], object?>> GetDecoders()
+    public async Task<Dictionary<string, Func<byte[], object?>>> GetDecodersAsync(
+        CancellationToken cancellationToken = default)
     {
         Dictionary<string, Func<byte[], object?>> decoders = new Dictionary<string, Func<byte[], object?>>(StringComparer.OrdinalIgnoreCase);
 
@@ -49,7 +51,9 @@ public class SchemaProvider
                 SearchScope.Base,
                 "schemaNamingContext");
 
-            SearchResponse rootDseResponse = (SearchResponse)ldapConnection.SendRequest(rootDseRequest);
+            SearchResponse rootDseResponse = await ldapConnection
+                .SendRequestAsync<SearchResponse>(rootDseRequest, cancellationToken)
+                .ConfigureAwait(false);
 
             if (rootDseResponse.Entries.Count == 0)
             {
@@ -77,7 +81,9 @@ public class SchemaProvider
 
             while (true)
             {
-                SearchResponse schemaResponse = (SearchResponse)ldapConnection.SendRequest(schemaRequest);
+                SearchResponse schemaResponse = await ldapConnection
+                    .SendRequestAsync<SearchResponse>(schemaRequest, cancellationToken)
+                    .ConfigureAwait(false);
 
                 foreach (SearchResultEntry entry in schemaResponse.Entries)
                 {
@@ -115,6 +121,11 @@ public class SchemaProvider
             }
 
             _logger.LogInformation("Loaded {Count} attribute decoders from schema", decoders.Count);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is not a schema failure; let the caller observe it.
+            throw;
         }
         catch (Exception ex)
         {

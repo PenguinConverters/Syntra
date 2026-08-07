@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -72,7 +73,9 @@ public class Provider : Core.Source.Provider
     public bool HadErrors => _hadErrors;
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -96,11 +99,19 @@ public class Provider : Core.Source.Provider
             : _configuration.LdapFilter;
 
         // Full sync / delta changed objects
-        // In a real implementation, this would call PenguinConverters.Syntra.ActiveDirectory connection
-        // to execute the LDAP search and yield Entity objects per result.
+        // In a real implementation, this streams the paged LDAP search from
+        // PenguinConverters.Syntra.ActiveDirectory.Connection and yields an Entity per result:
+        //   await foreach (Dictionary<string, object?> entry in connection.RetrieveAsync(
+        //       ldapFilter, propertyList, _configuration.BaseDN, false, cancellationToken))
+        //   {
+        //       yield return CreateEntity(entry);
+        //   }
         Logger.LogTrace(
             "Executing LDAP search with filter: {Filter} requesting {AttributeCount} attributes: {Attributes}",
             ldapFilter, propertyList.Length, string.Join(", ", propertyList));
+
+        // Placeholder for the awaited LDAP page request that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         // Delta deleted objects
         if (_configuration.Delta)

@@ -32,9 +32,12 @@ public class Worker
     }
 
     /// <summary>
-    /// Executes the synchronization workflow: loads configuration, builds provider and consumer, and runs sync.
+    /// Asynchronously executes the synchronization workflow: loads configuration,
+    /// builds provider and consumer, and runs sync.
     /// </summary>
-    public void Run()
+    /// <param name="cancellationToken">A token to signal cancellation of the workflow.</param>
+    /// <returns>A task that completes when the workflow has finished.</returns>
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Loading configuration from {Path}", _configurationPath);
 
@@ -43,7 +46,7 @@ public class Worker
             throw new FileNotFoundException($"Configuration file not found: {_configurationPath}", _configurationPath);
         }
 
-        string yamlContent = File.ReadAllText(_configurationPath);
+        string yamlContent = await File.ReadAllTextAsync(_configurationPath, cancellationToken).ConfigureAwait(false);
         IDeserializer deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .Build();
@@ -92,8 +95,8 @@ public class Worker
 
         // Run synchronization
         _logger.LogInformation("Starting synchronization");
-        consumer.Synchronize(provider);
-        consumer.Finalize(provider);
+        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
 
         if (consumer.HadErrors)
         {

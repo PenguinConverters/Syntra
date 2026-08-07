@@ -18,14 +18,14 @@ public class Consumer : Core.Target.Consumer
     private readonly ConcurrentDictionary<string, EntityBuilder> _entityBuilders = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
-    public override void Synchronize(IProvider provider)
+    public override async Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         Logger.LogInformation("SchemaDesigner: Starting entity analysis");
 
         string[] properties = Array.Empty<string>();
         int entityCount = 0;
 
-        foreach (IEntity entity in provider.Retrieve(properties))
+        await foreach (IEntity entity in provider.RetrieveAsync(properties, cancellationToken).ConfigureAwait(false))
         {
             ProcessEntity(entity);
             entityCount++;
@@ -41,7 +41,7 @@ public class Consumer : Core.Target.Consumer
     }
 
     /// <inheritdoc />
-    public override void Finalize(IProvider provider)
+    public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         ConsoleWriter writer = new ConsoleWriter();
 
@@ -69,7 +69,7 @@ public class Consumer : Core.Target.Consumer
             writer.WriteLine();
         }
 
-        writer.Flush();
+        await writer.FlushAsync().ConfigureAwait(false);
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using PenguinConverters.Syntra.Core.Entities;
 using PenguinConverters.Syntra.Provider.DevOps.Source;
@@ -32,7 +33,9 @@ public class Provider : Core.Source.Provider
     }
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -48,7 +51,10 @@ public class Provider : Core.Source.Provider
         // 1. Authenticate via PAT (Base64 encoded as Basic auth header)
         // 2. Build request URL: https://dev.azure.com/{Organization}/{Project}/_apis/...
         // 3. Page through Azure DevOps API results using continuationToken
-        // 4. Yield Entity objects per result record
+        // 4. Yield Entity objects per result record as each page arrives
+
+        // Placeholder for the awaited Azure DevOps page request that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         Logger.LogInformation("DevOps retrieval completed.");
     }

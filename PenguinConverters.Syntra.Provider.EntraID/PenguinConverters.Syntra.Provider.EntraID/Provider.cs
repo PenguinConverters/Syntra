@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -46,7 +47,9 @@ public class Provider : Core.Source.Provider
     }
 
     /// <inheritdoc />
-    public override IEnumerable<IEntity> Retrieve(IEnumerable<string> properties)
+    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
+        IEnumerable<string> properties,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -65,9 +68,12 @@ public class Provider : Core.Source.Provider
         //   Full sync: GET /endpoint?$select=properties
         //   Delta sync: GET /endpoint/delta?$deltatoken=...
 
-        // Page through Graph API results and yield Entity objects
+        // Page through Graph API results and yield Entity objects as each page arrives
         // For each entity, resolve any configured relationships by replacing
         // <%objectId%> placeholders and fetching nested endpoints
+
+        // Placeholder for the awaited Graph API page request that yields entities.
+        await Task.CompletedTask.ConfigureAwait(false);
 
         // After successful retrieval, store the new delta token as metadata
         // _deltaToken = newDeltaToken;

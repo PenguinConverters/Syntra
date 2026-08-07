@@ -13,14 +13,18 @@ public interface IConsumer
     bool HadErrors { get; }
 
     /// <summary>
-    /// Synchronizes entities from the given provider to the target system.
+    /// Asynchronously synchronizes entities from the given provider to the target system.
     /// </summary>
     /// <param name="provider">The source provider to read entities from.</param>
-    void Synchronize(IProvider provider);
+    /// <param name="cancellationToken">A token to signal cancellation of the synchronization.</param>
+    /// <returns>A task that completes when synchronization has finished.</returns>
+    Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Finalizes the synchronization, performing any cleanup or post-processing.
+    /// Asynchronously finalizes the synchronization, performing any cleanup or post-processing.
     /// </summary>
     /// <param name="provider">The source provider used during synchronization.</param>
-    void Finalize(IProvider provider);
+    /// <param name="cancellationToken">A token to signal cancellation of the finalization.</param>
+    /// <returns>A task that completes when finalization has finished.</returns>
+    Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default);
 }

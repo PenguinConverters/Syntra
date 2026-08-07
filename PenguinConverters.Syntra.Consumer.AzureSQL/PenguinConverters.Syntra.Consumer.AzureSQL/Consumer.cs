@@ -35,7 +35,7 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
     }
 
     /// <inheritdoc />
-    public override void Synchronize(IProvider provider)
+    public override async Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         if (_configuration is null)
         {
@@ -51,23 +51,26 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
             .Select(c => c.SourceProperty!)
             ?? Enumerable.Empty<string>();
 
-        Parallel.ForEach(
-            provider.Retrieve(properties),
-            new ParallelOptions { MaxDegreeOfParallelism = _configuration.MaxDegreeOfParallelism },
-            entity =>
+        await Parallel.ForEachAsync(
+            provider.RetrieveAsync(properties, cancellationToken),
+            new ParallelOptions
             {
-                UpdateEntity(entity);
-            });
+                MaxDegreeOfParallelism = _configuration.MaxDegreeOfParallelism,
+                CancellationToken = cancellationToken
+            },
+            UpdateEntityAsync).ConfigureAwait(false);
 
         Logger.LogInformation("Azure SQL synchronization completed.");
     }
 
     /// <summary>
-    /// Performs an atomic MERGE operation (INSERT/UPDATE/DELETE) for a single entity.
+    /// Asynchronously performs an atomic MERGE operation (INSERT/UPDATE/DELETE) for a single entity.
     /// Uses the configured primary keys for matching and column definitions for value mapping.
     /// </summary>
     /// <param name="entity">The entity to merge into the target table.</param>
-    public void UpdateEntity(IEntity entity)
+    /// <param name="cancellationToken">A token to signal cancellation of the merge.</param>
+    /// <returns>A task that completes when the entity has been merged.</returns>
+    public async ValueTask UpdateEntityAsync(IEntity entity, CancellationToken cancellationToken = default)
     {
         if (_configuration is null) return;
 
@@ -80,6 +83,7 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
             //   WHEN MATCHED THEN UPDATE SET col1 = @col1, ...
             //   WHEN NOT MATCHED THEN INSERT (col1, ...) VALUES (@col1, ...)
             //   [WHEN NOT MATCHED BY SOURCE THEN DELETE / UPDATE SET Deleted = 1];
+            // and execute it with SqlCommand.ExecuteNonQueryAsync(cancellationToken).
 
             // Track composite key for full-sync deletion reconciliation
             string compositeKey = string.Join("|", _configuration.PrimaryKeys?
@@ -92,6 +96,9 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
             // If ShadowColumn is enabled, serialize entity properties to JSON
             // and include as a parameter in the MERGE statement
 
+            // Placeholder for the awaited MERGE execution against the target table.
+            await Task.CompletedTask.ConfigureAwait(false);
+
             Logger.LogTrace("Merged entity '{Identifier}' into '{TableName}'.", entity.Identifier, _configuration.TableName);
         }
         catch (Exception ex)
@@ -102,7 +109,7 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
     }
 
     /// <inheritdoc />
-    public override void Finalize(IProvider provider)
+    public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
         if (_configuration is null) return;
 
@@ -115,18 +122,20 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
         // 4. For missing keys:
         //    - If HasDeletedColumn: UPDATE SET Deleted = 1
         //    - Otherwise: DELETE FROM {TableName} WHERE pk = @pk
-        DeletionTrivial(provider);
+        await DeletionTrivialAsync(provider, cancellationToken).ConfigureAwait(false);
 
         Logger.LogInformation("Azure SQL finalization completed.");
     }
 
     /// <summary>
-    /// Performs full-sync deletion reconciliation by marking rows not seen
+    /// Asynchronously performs full-sync deletion reconciliation by marking rows not seen
     /// in the current sync run as deleted. Respects the configured threshold
     /// to prevent mass deletions.
     /// </summary>
     /// <param name="provider">The source provider to check for errors.</param>
-    private void DeletionTrivial(IProvider provider)
+    /// <param name="cancellationToken">A token to signal cancellation of the reconciliation.</param>
+    /// <returns>A task that completes when reconciliation has finished.</returns>
+    private async Task DeletionTrivialAsync(IProvider provider, CancellationToken cancellationToken)
     {
         if (_configuration is null || HadErrors) return;
 
@@ -144,5 +153,8 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
         // 4. Remaining keys are candidates for deletion
         // 5. Check threshold: if (deletionCount / existingCount * 100) > Threshold, throw
         // 6. Execute deletion/soft-delete for remaining keys
+
+        // Placeholder for the awaited reconciliation queries against the target table.
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 }

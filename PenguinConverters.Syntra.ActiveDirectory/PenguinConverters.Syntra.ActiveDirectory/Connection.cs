@@ -1,5 +1,6 @@
 using System.DirectoryServices.Protocols;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -97,7 +98,9 @@ public class Connection : IDisposable
     public Dictionary<string, Func<byte[], object?>> EncodersByType { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Retrieves directory entries matching the specified LDAP filter using paged search.
+    /// Asynchronously streams directory entries matching the specified LDAP filter using paged search.
+    /// Each page is fetched as the previous one is consumed, so callers never wait for the
+    /// full result set to materialize.
     /// </summary>
     /// <param name="ldapFilter">The LDAP search filter expression.</param>
     /// <param name="attributesToLoad">The attributes to retrieve for each entry.</param>
@@ -107,12 +110,16 @@ public class Connection : IDisposable
     /// <param name="showDeleted">
     /// If <c>true</c>, includes tombstone (deleted) objects in the results.
     /// </param>
-    /// <returns>An enumerable of dictionaries, each representing a directory entry with its attributes.</returns>
-    public IEnumerable<Dictionary<string, object?>> Retrieve(
+    /// <param name="cancellationToken">A token to signal cancellation of the search.</param>
+    /// <returns>
+    /// An asynchronous stream of dictionaries, each representing a directory entry with its attributes.
+    /// </returns>
+    public async IAsyncEnumerable<Dictionary<string, object?>> RetrieveAsync(
         string ldapFilter,
         string[] attributesToLoad,
         string? baseDn = null,
-        bool showDeleted = false)
+        bool showDeleted = false,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         LdapConnection connection = OpenLdapConnection();
         string searchBase = baseDn ?? BaseSearchDn;
@@ -129,7 +136,9 @@ public class Connection : IDisposable
 
         while (true)
         {
-            SearchResponse response = (SearchResponse)connection.SendRequest(request);
+            SearchResponse response = await connection
+                .SendRequestAsync<SearchResponse>(request, cancellationToken)
+                .ConfigureAwait(false);
 
             if (response is null)
             {
@@ -182,12 +191,17 @@ public class Connection : IDisposable
     }
 
     /// <summary>
-    /// Retrieves a multi-valued attribute using range retrieval to handle large value sets.
+    /// Asynchronously retrieves a multi-valued attribute using range retrieval to handle
+    /// large value sets.
     /// </summary>
     /// <param name="baseDn">The distinguished name of the object.</param>
     /// <param name="attribute">The attribute name to retrieve.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the retrieval.</param>
     /// <returns>A list of decoded attribute values.</returns>
-    public List<object?> RetrieveCollectionAttribute(string baseDn, string attribute)
+    public async Task<List<object?>> RetrieveCollectionAttributeAsync(
+        string baseDn,
+        string attribute,
+        CancellationToken cancellationToken = default)
     {
         LdapConnection connection = OpenLdapConnection();
         List<object?> results = new List<object?>();
@@ -201,7 +215,9 @@ public class Connection : IDisposable
             string rangeAttribute = $"{attribute};range={rangeStart}-{rangeStart + rangeStep - 1}";
             SearchRequest request = new SearchRequest(baseDn, "(objectClass=*)", SearchScope.Base, rangeAttribute);
 
-            SearchResponse response = (SearchResponse)connection.SendRequest(request);
+            SearchResponse response = await connection
+                .SendRequestAsync<SearchResponse>(request, cancellationToken)
+                .ConfigureAwait(false);
 
             if (response.Entries.Count == 0)
             {
@@ -238,48 +254,70 @@ public class Connection : IDisposable
     }
 
     /// <summary>
-    /// Attempts to replace an attribute value on a directory object.
+    /// Asynchronously attempts to replace an attribute value on a directory object.
     /// </summary>
     /// <param name="distinguishedName">The DN of the object to modify.</param>
     /// <param name="attributeName">The name of the attribute to replace.</param>
     /// <param name="value">The new value for the attribute.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the modification.</param>
     /// <returns><c>true</c> if the modification succeeded; otherwise, <c>false</c>.</returns>
-    public bool TryAttributeModificationReplace(string distinguishedName, string attributeName, object value)
+    public Task<bool> TryAttributeModificationReplaceAsync(
+        string distinguishedName,
+        string attributeName,
+        object value,
+        CancellationToken cancellationToken = default)
     {
-        return TryModifyAttribute(distinguishedName, attributeName, value, DirectoryAttributeOperation.Replace);
+        return TryModifyAttributeAsync(
+            distinguishedName, attributeName, value, DirectoryAttributeOperation.Replace, cancellationToken);
     }
 
     /// <summary>
-    /// Attempts to add a value to an attribute on a directory object.
+    /// Asynchronously attempts to add a value to an attribute on a directory object.
     /// </summary>
     /// <param name="distinguishedName">The DN of the object to modify.</param>
     /// <param name="attributeName">The name of the attribute to add to.</param>
     /// <param name="value">The value to add.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the modification.</param>
     /// <returns><c>true</c> if the modification succeeded; otherwise, <c>false</c>.</returns>
-    public bool TryAttributeModificationAdd(string distinguishedName, string attributeName, object value)
+    public Task<bool> TryAttributeModificationAddAsync(
+        string distinguishedName,
+        string attributeName,
+        object value,
+        CancellationToken cancellationToken = default)
     {
-        return TryModifyAttribute(distinguishedName, attributeName, value, DirectoryAttributeOperation.Add);
+        return TryModifyAttributeAsync(
+            distinguishedName, attributeName, value, DirectoryAttributeOperation.Add, cancellationToken);
     }
 
     /// <summary>
-    /// Attempts to delete a value from an attribute on a directory object.
+    /// Asynchronously attempts to delete a value from an attribute on a directory object.
     /// </summary>
     /// <param name="distinguishedName">The DN of the object to modify.</param>
     /// <param name="attributeName">The name of the attribute to delete from.</param>
     /// <param name="value">The value to remove.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the modification.</param>
     /// <returns><c>true</c> if the modification succeeded; otherwise, <c>false</c>.</returns>
-    public bool TryAttributeModificationDelete(string distinguishedName, string attributeName, object value)
+    public Task<bool> TryAttributeModificationDeleteAsync(
+        string distinguishedName,
+        string attributeName,
+        object value,
+        CancellationToken cancellationToken = default)
     {
-        return TryModifyAttribute(distinguishedName, attributeName, value, DirectoryAttributeOperation.Delete);
+        return TryModifyAttributeAsync(
+            distinguishedName, attributeName, value, DirectoryAttributeOperation.Delete, cancellationToken);
     }
 
     /// <summary>
-    /// Attempts to create a new directory object with the specified attributes.
+    /// Asynchronously attempts to create a new directory object with the specified attributes.
     /// </summary>
     /// <param name="distinguishedName">The DN of the new object.</param>
     /// <param name="attributes">The attributes to set on the new object.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the creation.</param>
     /// <returns><c>true</c> if the object was created successfully; otherwise, <c>false</c>.</returns>
-    public bool TryAddRequest(string distinguishedName, Dictionary<string, object> attributes)
+    public async Task<bool> TryAddRequestAsync(
+        string distinguishedName,
+        Dictionary<string, object> attributes,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -291,7 +329,7 @@ public class Connection : IDisposable
                 request.Attributes.Add(new DirectoryAttribute(kvp.Key, kvp.Value.ToString()));
             }
 
-            connection.SendRequest(request);
+            await connection.SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Created object: {DN}", distinguishedName);
             return true;
         }
@@ -310,6 +348,10 @@ public class Connection : IDisposable
     /// <summary>
     /// Validates whether the supplied credentials are valid against the directory.
     /// </summary>
+    /// <remarks>
+    /// Synchronous for the same reason as <see cref="OpenLdapConnection"/>: credential validation
+    /// is a bind, and no asynchronous bind exists in <c>System.DirectoryServices.Protocols</c>.
+    /// </remarks>
     /// <param name="username">The username to validate.</param>
     /// <param name="password">The password to validate.</param>
     /// <returns><c>true</c> if the credentials are valid; otherwise, <c>false</c>.</returns>
@@ -343,6 +385,13 @@ public class Connection : IDisposable
     /// <summary>
     /// Opens or returns the existing LDAP connection.
     /// </summary>
+    /// <remarks>
+    /// This method is synchronous by design. <c>System.DirectoryServices.Protocols</c> exposes no
+    /// asynchronous bind — <see cref="LdapConnection.Bind()"/> has no APM or TAP counterpart — so
+    /// wrapping it would only move the block onto a thread-pool thread without gaining any
+    /// scalability. The bind happens once per connection; every subsequent request is genuinely
+    /// asynchronous via <see cref="LdapConnectionExtensions.SendRequestAsync"/>.
+    /// </remarks>
     /// <returns>An open <see cref="LdapConnection"/>.</returns>
     public LdapConnection OpenLdapConnection()
     {
@@ -439,13 +488,14 @@ public class Connection : IDisposable
     }
 
     /// <summary>
-    /// Attempts to modify an attribute on a directory object.
+    /// Asynchronously attempts to modify an attribute on a directory object.
     /// </summary>
-    private bool TryModifyAttribute(
+    private async Task<bool> TryModifyAttributeAsync(
         string distinguishedName,
         string attributeName,
         object value,
-        DirectoryAttributeOperation operation)
+        DirectoryAttributeOperation operation,
+        CancellationToken cancellationToken)
     {
         try
         {
@@ -466,7 +516,7 @@ public class Connection : IDisposable
             }
 
             ModifyRequest request = new ModifyRequest(distinguishedName, modification);
-            connection.SendRequest(request);
+            await connection.SendRequestAsync(request, cancellationToken).ConfigureAwait(false);
 
             _logger.LogDebug("Modified attribute '{Attribute}' on {DN} ({Operation})",
                 attributeName, distinguishedName, operation);

@@ -39,7 +39,7 @@ public abstract class Provider : IProvider
     public virtual byte[]? Metadata => RawMetadata;
 
     /// <inheritdoc />
-    public abstract IEnumerable<IEntity> Retrieve(IEnumerable<string> properties);
+    public abstract IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sets the logger instance.
