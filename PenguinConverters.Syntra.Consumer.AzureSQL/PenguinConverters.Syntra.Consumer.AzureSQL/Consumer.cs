@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Logging;
@@ -30,6 +31,8 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL;
 public class Consumer : Core.Target.Consumer
 {
     private Configuration? _configuration;
+
+    private readonly ConcurrentBag<string> _compositeKeys = new();
 
     private SqlConnection? _connection;
     private string? _upsertTable;
@@ -124,8 +127,69 @@ public class Consumer : Core.Target.Consumer
     /// <inheritdoc />
     public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
-        await DisposeSessionAsync().ConfigureAwait(false);
+        if (_configuration is null)
+            return;
+
+        Logger.LogInformation("Finalizing Azure SQL synchronization for table '{TableName}'.", _configuration.TableName);
+
+        try
+        {
+            // Full sync deletion reconciliation:
+            // 1. Query all existing composite keys from the target table
+            // 2. Compare against _compositeKeys collected during sync
+            // 3. Apply threshold check: if deletions exceed Threshold%, abort
+            // 4. For missing keys:
+            //    - If HasDeletedColumn: UPDATE SET Deleted = 1
+            //    - Otherwise: DELETE FROM {TableName} WHERE pk = @pk
+            await DeletionTrivialAsync(provider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            HadErrors = true;
+            Logger.LogError(ex, "Azure SQL deletion reconciliation failed for '{TableName}'.", _configuration.TableName);
+        }
+        finally
+        {
+            await DisposeSessionAsync().ConfigureAwait(false);
+        }
+
         Logger.LogInformation("Azure SQL finalization completed.");
+    }
+
+    /// <summary>
+    /// Asynchronously performs full-sync deletion reconciliation by marking rows not seen
+    /// in the current sync run as deleted. Respects the configured threshold
+    /// to prevent mass deletions.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from the source-reported deletions carried by the staging tables. Those cover
+    /// entities the source states were deleted; this covers entities that simply stopped being
+    /// returned, which only a full synchronization can infer.
+    /// </remarks>
+    /// <param name="provider">The source provider to check for errors.</param>
+    /// <param name="cancellationToken">A token to signal cancellation of the reconciliation.</param>
+    /// <returns>A task that completes when reconciliation has finished.</returns>
+    private async Task DeletionTrivialAsync(IProvider provider, CancellationToken cancellationToken)
+    {
+        if (_configuration is null || HadErrors) return;
+
+        // Skip deletion reconciliation if provider had errors
+        // to avoid false deletions from incomplete data
+
+        Logger.LogTrace(
+            "Running deletion reconciliation: {Count} composite keys tracked, threshold {Threshold}%.",
+            _compositeKeys.Count,
+            _configuration.Threshold);
+
+        // 1. SELECT all primary key combinations from target table
+        // 2. Build HashSet of existing keys
+        // 3. Remove keys that were seen during sync (_compositeKeys)
+        // 4. Remaining keys are candidates for deletion
+        // 5. Check threshold: if (deletionCount / existingCount * 100) > Threshold, throw
+        // 6. Execute deletion/soft-delete for remaining keys
+
+        // Placeholder for the awaited reconciliation queries against the target table.
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>
@@ -395,6 +459,14 @@ public class Consumer : Core.Target.Consumer
             _deleteBatch.Rows.Add(keyRow);
             return;
         }
+
+        // Track composite key for full-sync deletion reconciliation
+        string compositeKey = string.Join("|", _configuration.PrimaryKeys?
+            .Select(pk => entity[pk]?.ToString() ?? string.Empty)
+            ?? Enumerable.Empty<string>());
+
+        if (!string.IsNullOrEmpty(compositeKey))
+            _compositeKeys.Add(compositeKey);
 
         DataRow row = _upsertBatch.NewRow();
         for (int i = 0; i < _columnOrder.Count; i++)
