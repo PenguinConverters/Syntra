@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PenguinConverters.Syntra.Core.Settings;
+using PenguinConverters.Syntra.Core.Types;
 
 namespace PenguinConverters.Syntra.ActiveDirectory;
 
@@ -114,7 +115,7 @@ public class Connection : IDisposable
     /// <returns>
     /// An asynchronous stream of dictionaries, each representing a directory entry with its attributes.
     /// </returns>
-    public async IAsyncEnumerable<Dictionary<string, object?>> RetrieveAsync(
+    public async IAsyncEnumerable<IDictionary<string, object?>> RetrieveAsync(
         string ldapFilter,
         string[] attributesToLoad,
         string? baseDn = null,
@@ -147,7 +148,9 @@ public class Connection : IDisposable
 
             foreach (SearchResultEntry entry in response.Entries)
             {
-                Dictionary<string, object?> result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                QuickDictionary result = new QuickDictionary(
+                    entry.Attributes.Count,
+                    StringComparer.OrdinalIgnoreCase);
 
                 foreach (string attributeName in entry.Attributes.AttributeNames)
                 {
@@ -316,7 +319,7 @@ public class Connection : IDisposable
     /// <returns><c>true</c> if the object was created successfully; otherwise, <c>false</c>.</returns>
     public async Task<bool> TryAddRequestAsync(
         string distinguishedName,
-        Dictionary<string, object> attributes,
+        IDictionary<string, object> attributes,
         CancellationToken cancellationToken = default)
     {
         try

@@ -1,11 +1,14 @@
+using PenguinConverters.Syntra.Core.Types;
+
 namespace PenguinConverters.Syntra.Core.Entities;
 
 /// <summary>
-/// Default implementation of <see cref="IEntity"/> backed by a <see cref="Dictionary{TKey,TValue}"/>.
+/// Default implementation of <see cref="IEntity"/> backed by a <see cref="QuickDictionary"/>,
+/// which is sized for the handful of properties a typical entity carries.
 /// </summary>
 public class Entity : IEntity
 {
-    private readonly Dictionary<string, object?> _properties = new(StringComparer.OrdinalIgnoreCase);
+    private readonly QuickDictionary _properties = new QuickDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Entity"/> class.

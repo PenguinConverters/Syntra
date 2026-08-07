@@ -10,6 +10,7 @@ using Microsoft.Identity.Web;
 using PenguinConverters.Syntra.Api.Entities;
 using PenguinConverters.Syntra.Api.OData;
 using PenguinConverters.Syntra.Api.Settings;
+using PenguinConverters.Syntra.Core.Types;
 
 namespace PenguinConverters.Syntra.Api.Controllers;
 
@@ -107,7 +108,7 @@ public class SyntraController : ControllerBase
             foreach (SqlParameter param in _queryBuilder.Parameters)
                 command.Parameters.Add(param);
 
-            List<Dictionary<string, object?>> results = new List<Dictionary<string, object?>>();
+            List<IDictionary<string, object?>> results = new List<IDictionary<string, object?>>();
             long? count = null;
 
             // Optionally get count
@@ -117,7 +118,7 @@ public class SyntraController : ControllerBase
                 count = await GetEntityCount(entity, queryParams, connection, cancellationToken);
             }
 
-            await foreach (Dictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
+            await foreach (IDictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
             {
                 results.Add(row);
             }
@@ -235,7 +236,7 @@ public class SyntraController : ControllerBase
             string sanitizedEntity = SanitizeEntityName(entity);
             string procedureName = $"SP_S1FE_{sanitizedEntity}_{operation}";
 
-            Dictionary<string, object?> parameters = new Dictionary<string, object?>();
+            QuickDictionary parameters = new QuickDictionary();
             if (body.ValueKind == JsonValueKind.Object)
             {
                 foreach (JsonProperty prop in body.EnumerateObject())
@@ -265,8 +266,8 @@ public class SyntraController : ControllerBase
                 command.Parameters.Add(param);
 
             // Try to read results if the SP returns a result set
-            List<Dictionary<string, object?>> results = new List<Dictionary<string, object?>>();
-            await foreach (Dictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
+            List<IDictionary<string, object?>> results = new List<IDictionary<string, object?>>();
+            await foreach (IDictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
             {
                 results.Add(row);
             }
@@ -349,8 +350,8 @@ public class SyntraController : ControllerBase
         };
         command.Parameters.AddWithValue("@ProcPattern", $"SP_S1FE_{sanitizedEntity}_%");
 
-        List<Dictionary<string, object?>> results = new List<Dictionary<string, object?>>();
-        await foreach (Dictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
+        List<IDictionary<string, object?>> results = new List<IDictionary<string, object?>>();
+        await foreach (IDictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
         {
             results.Add(row);
         }
@@ -380,8 +381,8 @@ public class SyntraController : ControllerBase
         };
         command.Parameters.AddWithValue("@ViewName", $"SP_S1FE_{sanitizedEntity}_READ");
 
-        List<Dictionary<string, object?>> results = new List<Dictionary<string, object?>>();
-        await foreach (Dictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
+        List<IDictionary<string, object?>> results = new List<IDictionary<string, object?>>();
+        await foreach (IDictionary<string, object?> row in ExecuteReaderAsync(command, cancellationToken))
         {
             results.Add(row);
         }
@@ -418,7 +419,7 @@ public class SyntraController : ControllerBase
     /// Executes a SQL command and streams results as an async enumerable of dictionaries.
     /// Each dictionary maps column names to their values.
     /// </summary>
-    private static async IAsyncEnumerable<Dictionary<string, object?>> ExecuteReaderAsync(
+    private static async IAsyncEnumerable<IDictionary<string, object?>> ExecuteReaderAsync(
         SqlCommand command, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await using SqlDataReader reader = await command.ExecuteReaderAsync(
@@ -430,7 +431,7 @@ public class SyntraController : ControllerBase
 
         while (await reader.ReadAsync(cancellationToken))
         {
-            Dictionary<string, object?> row = new Dictionary<string, object?>(columnNames.Length);
+            QuickDictionary row = new QuickDictionary(columnNames.Length);
             for (int i = 0; i < columnNames.Length; i++)
             {
                 object value = reader.GetValue(i);
