@@ -15,6 +15,21 @@ public class Configuration
     public const int DefaultMaxDegreeOfParallelism = 4;
 
     /// <summary>
+    /// Default number of rows staged before each bulk copy and MERGE.
+    /// </summary>
+    public const int DefaultBatchSize = 10000;
+
+    /// <summary>
+    /// Default SQL command timeout, in seconds. Bulk MERGE batches can be long-running.
+    /// </summary>
+    public const int DefaultCommandTimeoutSeconds = 300;
+
+    /// <summary>
+    /// Default name of the soft-delete column when <see cref="HasDeletedColumn"/> is set.
+    /// </summary>
+    public const string DefaultDeletedColumnName = "Deleted";
+
+    /// <summary>
     /// Gets or sets the SQL Server connection string.
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
@@ -48,13 +63,47 @@ public class Configuration
     /// Gets or sets the maximum degree of parallelism for MERGE operations.
     /// Defaults to <c>4</c>.
     /// </summary>
+    /// <remarks>
+    /// No longer used by this consumer. Writes go through a session-scoped temporary staging
+    /// table, which requires a single connection held open for the run, and
+    /// <c>SqlConnection</c> is not thread-safe. Parallelism previously served to hide per-row
+    /// round-trip latency; bulk loading removes the per-row round-trip, so there is nothing
+    /// left to hide. Retained so existing configuration files continue to bind.
+    /// Use <see cref="BatchSize"/> to tune throughput.
+    /// </remarks>
+    [Obsolete("Not used by the bulk write path. Tune throughput with BatchSize instead.")]
     public int MaxDegreeOfParallelism { get; set; } = DefaultMaxDegreeOfParallelism;
+
+    /// <summary>
+    /// Gets or sets the number of rows staged before each bulk copy and MERGE.
+    /// Larger batches reduce round-trips at the cost of memory and longer-held locks.
+    /// Defaults to <c>10000</c>.
+    /// </summary>
+    public int BatchSize { get; set; } = DefaultBatchSize;
+
+    /// <summary>
+    /// Gets or sets the SQL command timeout in seconds. Defaults to <c>300</c>.
+    /// </summary>
+    public int CommandTimeoutSeconds { get; set; } = DefaultCommandTimeoutSeconds;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this is a delta synchronization.
+    /// Deletion reconciliation is skipped when set, since an entity absent from a delta
+    /// run has not been deleted, it simply did not change.
+    /// </summary>
+    public bool Delta { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the target table has a <c>Deleted</c> column
     /// for soft-delete tracking instead of physical row deletion.
     /// </summary>
     public bool HasDeletedColumn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the soft-delete column used when <see cref="HasDeletedColumn"/>
+    /// is set. Defaults to <c>Deleted</c>.
+    /// </summary>
+    public string DeletedColumnName { get; set; } = DefaultDeletedColumnName;
 
     /// <summary>
     /// Gets or sets a value indicating whether a shadow column is used

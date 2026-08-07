@@ -14,6 +14,15 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.*" />
   </ItemGroup>
 
+  <!--
+    SqlStatementBuilder stays internal: generated T-SQL is an implementation detail, not part
+    of the package surface. The test project asserts the generated text directly, since it is
+    the only part of the bulk path verifiable without a live SQL Server.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="PenguinConverters.Syntra.Consumer.AzureSQL.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core.csproj" />
   </ItemGroup>
