@@ -32,29 +32,47 @@ internal static class SqlStatementBuilder
         return string.Concat("[", identifier.Replace("]", "]]"), "]");
     }
 
+    /// <summary>Suffix identifying the staging table carrying inserts and updates.</summary>
+    public const string UpsertSuffix = "_U";
+
+    /// <summary>Suffix identifying the staging table carrying source-reported deletions.</summary>
+    public const string DeleteSuffix = "_D";
+
     /// <summary>
     /// Derives a temporary table name from the synchronization namespace or configuration name.
     /// Non-alphanumeric characters are replaced with underscores so the result is always a legal
     /// identifier regardless of the namespace format.
     /// </summary>
     /// <param name="synchronizationName">The namespace or configuration name.</param>
-    /// <returns>A local temporary table name such as <c>#S1_Contoso_Users</c>.</returns>
-    public static string BuildTempTableName(string? synchronizationName)
+    /// <param name="suffix">
+    /// Distinguishes the two staging tables of a run: <see cref="UpsertSuffix"/> or
+    /// <see cref="DeleteSuffix"/>.
+    /// </param>
+    /// <returns>A local temporary table name such as <c>#S1_Contoso_Users_U</c>.</returns>
+    public static string BuildTempTableName(string? synchronizationName, string suffix = "")
     {
-        if (string.IsNullOrWhiteSpace(synchronizationName))
-            return "#S1_Sync";
+        suffix ??= string.Empty;
 
-        StringBuilder builder = new StringBuilder(synchronizationName.Length + 4);
+        StringBuilder builder = new StringBuilder();
         builder.Append("#S1_");
 
-        foreach (char character in synchronizationName)
-            builder.Append(char.IsLetterOrDigit(character) ? character : '_');
+        if (string.IsNullOrWhiteSpace(synchronizationName))
+        {
+            builder.Append("Sync");
+        }
+        else
+        {
+            foreach (char character in synchronizationName)
+                builder.Append(char.IsLetterOrDigit(character) ? character : '_');
+        }
 
-        // SQL Server truncates #temp names at 116 characters; stay well inside that.
-        const int maxLength = 100;
+        // SQL Server truncates #temp names at 116 characters. Trim the derived part so the
+        // suffix always survives: it is what keeps the two staging tables distinct.
+        int maxLength = 100 - suffix.Length;
         if (builder.Length > maxLength)
             builder.Length = maxLength;
 
+        builder.Append(suffix);
         return builder.ToString();
     }
 
@@ -151,24 +169,23 @@ internal static class SqlStatementBuilder
     }
 
     /// <summary>
-    /// Builds the statement that reconciles deletions after a full synchronization: rows present
-    /// in the target but absent from the set of keys seen during the run.
+    /// Builds the statement that removes rows the source reported as deleted, matching the target
+    /// against the key-only delete staging table.
     /// </summary>
+    /// <remarks>
+    /// Only used when the target has no soft-delete column. A soft delete is an ordinary UPDATE
+    /// of the timestamp column, so those rows travel through the upsert staging table and the
+    /// MERGE handles them; no separate statement and no second staging table are involved.
+    /// </remarks>
     /// <param name="targetTable">The destination table name.</param>
-    /// <param name="keyTableName">
-    /// The staging table holding every key observed during the run.
-    /// </param>
+    /// <param name="deleteTableName">The staging table holding the keys to remove.</param>
     /// <param name="primaryKeys">The columns forming the match condition.</param>
-    /// <param name="deletedColumn">
-    /// When supplied, rows are soft-deleted by setting this column to <c>SYSUTCDATETIME()</c>
-    /// instead of being physically removed.
-    /// </param>
-    /// <returns>The reconciliation statement.</returns>
-    public static string BuildDeleteReconciliation(
+    /// <returns>The delete statement.</returns>
+    /// <exception cref="ArgumentException">Thrown when no primary keys are supplied.</exception>
+    public static string BuildDeleteFromStaging(
         string targetTable,
-        string keyTableName,
-        IReadOnlyList<string> primaryKeys,
-        string? deletedColumn)
+        string deleteTableName,
+        IReadOnlyList<string> primaryKeys)
     {
         if (primaryKeys is null || primaryKeys.Count == 0)
             throw new ArgumentException("At least one primary key is required.", nameof(primaryKeys));
@@ -176,69 +193,14 @@ internal static class SqlStatementBuilder
         string correlation = string.Join(
             Environment.NewLine + "          AND ",
             primaryKeys.Select(k =>
-                $"target.{QuoteIdentifier(k)} = seen.{QuoteIdentifier(k)}"));
+                $"target.{QuoteIdentifier(k)} = staged.{QuoteIdentifier(k)}"));
 
         StringBuilder builder = new StringBuilder();
+        builder.AppendLine("DELETE target");
+        builder.Append("  FROM ").Append(QuoteIdentifier(targetTable)).AppendLine(" AS target");
+        builder.Append(" INNER JOIN ").Append(QuoteIdentifier(deleteTableName)).AppendLine(" AS staged");
+        builder.Append("    ON ").Append(correlation).Append(';');
 
-        if (string.IsNullOrWhiteSpace(deletedColumn))
-        {
-            builder.Append("DELETE target").AppendLine();
-            builder.Append("  FROM ").Append(QuoteIdentifier(targetTable)).AppendLine(" AS target");
-        }
-        else
-        {
-            builder.Append("UPDATE target").AppendLine();
-            builder.Append("   SET target.").Append(QuoteIdentifier(deletedColumn)).AppendLine(" = SYSUTCDATETIME()");
-            builder.Append("  FROM ").Append(QuoteIdentifier(targetTable)).AppendLine(" AS target");
-            builder.Append(" WHERE target.").Append(QuoteIdentifier(deletedColumn)).AppendLine(" IS NULL");
-        }
-
-        builder.Append(string.IsNullOrWhiteSpace(deletedColumn) ? " WHERE" : "   AND").AppendLine(" NOT EXISTS (");
-        builder.Append("        SELECT 1 FROM ").Append(QuoteIdentifier(keyTableName)).AppendLine(" AS seen");
-        builder.Append("         WHERE ").AppendLine(correlation);
-        builder.Append("      );");
-
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Builds a count of rows that the reconciliation would affect, used for the threshold check.
-    /// </summary>
-    /// <param name="targetTable">The destination table name.</param>
-    /// <param name="keyTableName">The staging table holding every key observed during the run.</param>
-    /// <param name="primaryKeys">The columns forming the match condition.</param>
-    /// <param name="deletedColumn">When supplied, already-deleted rows are excluded.</param>
-    /// <returns>A statement selecting the candidate count and the total row count.</returns>
-    public static string BuildDeleteCandidateCount(
-        string targetTable,
-        string keyTableName,
-        IReadOnlyList<string> primaryKeys,
-        string? deletedColumn)
-    {
-        if (primaryKeys is null || primaryKeys.Count == 0)
-            throw new ArgumentException("At least one primary key is required.", nameof(primaryKeys));
-
-        string correlation = string.Join(
-            Environment.NewLine + "          AND ",
-            primaryKeys.Select(k =>
-                $"target.{QuoteIdentifier(k)} = seen.{QuoteIdentifier(k)}"));
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("SELECT");
-        builder.AppendLine("    COUNT_BIG(*) AS TotalRows,");
-        builder.AppendLine("    SUM(CASE WHEN NOT EXISTS (");
-        builder.Append("        SELECT 1 FROM ").Append(QuoteIdentifier(keyTableName)).AppendLine(" AS seen");
-        builder.Append("         WHERE ").AppendLine(correlation);
-        builder.AppendLine("    ) THEN 1 ELSE 0 END) AS DeleteCandidates");
-        builder.Append("  FROM ").Append(QuoteIdentifier(targetTable)).Append(" AS target");
-
-        if (!string.IsNullOrWhiteSpace(deletedColumn))
-        {
-            builder.AppendLine();
-            builder.Append(" WHERE target.").Append(QuoteIdentifier(deletedColumn)).Append(" IS NULL");
-        }
-
-        builder.Append(';');
         return builder.ToString();
     }
 

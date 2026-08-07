@@ -9,27 +9,37 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL;
 
 /// <summary>
 /// Azure SQL consumer that writes entities to a MSSQL destination in bulk.
-/// Entities are accumulated into batches, bulk-copied into a session-scoped staging table,
-/// and folded into the target with a single set-based MERGE per batch.
+/// Entities are accumulated into batches, bulk-copied into session-scoped staging tables, and
+/// folded into the target with one set-based statement per batch.
 /// </summary>
 /// <remarks>
-/// The staging table is a local temporary table, which is session-scoped. That requires one
-/// <see cref="SqlConnection"/> held open for the whole run, and <see cref="SqlConnection"/> is
-/// not thread-safe, so this consumer processes the provider stream sequentially. That is not a
-/// regression: parallelism previously existed to hide per-row round-trip latency, and bulk
-/// loading removes the per-row round-trip entirely.
+/// How deletions are handled depends on the target.
+///
+/// With a soft-delete column configured, a deletion is an ordinary UPDATE of the timestamp
+/// column, so deleted entities travel through the same upsert staging table as everything else
+/// and the MERGE writes them. One staging table, one statement.
+///
+/// Without one, a deletion needs a real DELETE, so keys are buffered into a second key-only
+/// staging table distinguished by suffix and removed with a join.
+///
+/// Staging tables are local temporary tables and therefore session-scoped, which requires one
+/// <see cref="SqlConnection"/> held open for the whole run. <see cref="SqlConnection"/> is not
+/// thread-safe, so the provider stream is processed sequentially. Parallelism previously existed
+/// to hide per-row round-trip latency; bulk loading removes the per-row round-trip entirely.
 /// </remarks>
 public class Consumer : Core.Target.Consumer
 {
     private Configuration? _configuration;
 
     private SqlConnection? _connection;
-    private string? _stagingTable;
-    private string? _seenKeysTable;
+    private string? _upsertTable;
+    private string? _deleteTable;
     private List<string> _columnOrder = new List<string>();
-    private DataTable? _batch;
-    private DataTable? _seenKeyBatch;
-    private long _rowsStaged;
+    private string? _deletedColumn;
+    private DataTable? _upsertBatch;
+    private DataTable? _deleteBatch;
+    private long _rowsUpserted;
+    private long _rowsDeleted;
     private long _batchesFlushed;
 
     /// <summary>
@@ -53,46 +63,27 @@ public class Consumer : Core.Target.Consumer
     /// <inheritdoc />
     public override async Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
-        if (_configuration is null)
-        {
-            Logger.LogError("Azure SQL consumer configuration is not set.");
-            HadErrors = true;
+        if (!ValidateConfiguration())
             return;
-        }
-
-        if (string.IsNullOrWhiteSpace(_configuration.TableName))
-        {
-            Logger.LogError("Azure SQL consumer requires a target table name.");
-            HadErrors = true;
-            return;
-        }
-
-        if (_configuration.Columns is null || _configuration.Columns.Count == 0)
-        {
-            Logger.LogError("Azure SQL consumer requires at least one column definition.");
-            HadErrors = true;
-            return;
-        }
-
-        if (_configuration.PrimaryKeys is null || _configuration.PrimaryKeys.Count == 0)
-        {
-            Logger.LogError("Azure SQL consumer requires at least one primary key column.");
-            HadErrors = true;
-            return;
-        }
 
         Logger.LogInformation(
             "Starting Azure SQL bulk synchronization to table '{TableName}' with batch size {BatchSize}.",
-            _configuration.TableName,
+            _configuration!.TableName,
             _configuration.BatchSize);
 
         try
         {
             await OpenAndPrepareAsync(cancellationToken).ConfigureAwait(false);
 
-            IEnumerable<string> properties = _configuration.Columns.Values
-                .Where(c => c.SourceProperty is not null)
-                .Select(c => c.SourceProperty!);
+            // Ask the provider only for properties backing a column that survived the
+            // intersection with the target schema. Retrieving a property nothing can store
+            // costs transfer on every entity for data that is discarded.
+            IEnumerable<string> properties = _columnOrder
+                .Where(name => _configuration.Columns!.ContainsKey(name))
+                .Select(name => _configuration.Columns![name].SourceProperty)
+                .Where(sourceProperty => sourceProperty is not null)
+                .Select(sourceProperty => sourceProperty!)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
 
             await foreach (IEntity entity in provider
                 .RetrieveAsync(properties, cancellationToken)
@@ -100,16 +91,22 @@ public class Consumer : Core.Target.Consumer
             {
                 AppendToBatch(entity);
 
-                if (_batch!.Rows.Count >= _configuration.BatchSize)
-                    await FlushBatchAsync(cancellationToken).ConfigureAwait(false);
+                if (_upsertBatch!.Rows.Count >= _configuration.BatchSize)
+                    await FlushUpsertsAsync(cancellationToken).ConfigureAwait(false);
+
+                if (_deleteBatch is not null && _deleteBatch.Rows.Count >= _configuration.BatchSize)
+                    await FlushDeletesAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            // Flush whatever the final partial batch holds.
-            await FlushBatchAsync(cancellationToken).ConfigureAwait(false);
+            // Nothing more is coming from the source, so whatever is buffered must still be
+            // processed. Upserts first: a key present in both buffers should end up deleted.
+            await FlushUpsertsAsync(cancellationToken).ConfigureAwait(false);
+            await FlushDeletesAsync(cancellationToken).ConfigureAwait(false);
 
             Logger.LogInformation(
-                "Azure SQL synchronization completed: {Rows} row(s) in {Batches} batch(es).",
-                _rowsStaged,
+                "Azure SQL synchronization completed: {Upserted} row(s) merged, {Deleted} row(s) deleted, {Batches} batch(es).",
+                _rowsUpserted,
+                _rowsDeleted,
                 _batchesFlushed);
         }
         catch (OperationCanceledException)
@@ -127,25 +124,44 @@ public class Consumer : Core.Target.Consumer
     /// <inheritdoc />
     public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
-        if (_configuration is null)
-            return;
-
-        try
-        {
-            if (_connection is not null && !HadErrors)
-                await ReconcileDeletionsAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            HadErrors = true;
-            Logger.LogError(ex, "Azure SQL deletion reconciliation failed for '{TableName}'.", _configuration.TableName);
-        }
-        finally
-        {
-            await DisposeSessionAsync().ConfigureAwait(false);
-        }
-
+        await DisposeSessionAsync().ConfigureAwait(false);
         Logger.LogInformation("Azure SQL finalization completed.");
+    }
+
+    /// <summary>
+    /// Checks that the configuration carries everything the bulk path needs.
+    /// </summary>
+    private bool ValidateConfiguration()
+    {
+        if (_configuration is null)
+        {
+            Logger.LogError("Azure SQL consumer configuration is not set.");
+            HadErrors = true;
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_configuration.TableName))
+        {
+            Logger.LogError("Azure SQL consumer requires a target table name.");
+            HadErrors = true;
+            return false;
+        }
+
+        if (_configuration.Columns is null || _configuration.Columns.Count == 0)
+        {
+            Logger.LogError("Azure SQL consumer requires at least one column definition.");
+            HadErrors = true;
+            return false;
+        }
+
+        if (_configuration.PrimaryKeys is null || _configuration.PrimaryKeys.Count == 0)
+        {
+            Logger.LogError("Azure SQL consumer requires at least one primary key column.");
+            HadErrors = true;
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -164,14 +180,14 @@ public class Consumer : Core.Target.Consumer
 
         await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-        // The staging table identifies the synchronization configuration, not the destination:
+        // The staging tables identify the synchronization configuration, not the destination:
         // a full and a delta sync of the same entity target one table but must not share staging.
         string synchronizationName = string.IsNullOrWhiteSpace(_configuration.ConfigurationName)
             ? _configuration.TableName!
             : _configuration.ConfigurationName;
 
-        _stagingTable = SqlStatementBuilder.BuildTempTableName(synchronizationName);
-        _seenKeysTable = SqlStatementBuilder.BuildTempTableName(synchronizationName + "_Keys");
+        _upsertTable = SqlStatementBuilder.BuildTempTableName(
+            synchronizationName, SqlStatementBuilder.UpsertSuffix);
 
         // Types come from the live target table rather than from configured strings, so staged
         // values match the destination exactly and the MERGE performs no implicit conversion.
@@ -184,41 +200,125 @@ public class Consumer : Core.Target.Consumer
                 $"Target table '{_configuration.TableName}' was not found, or exposes no insertable columns.");
         }
 
-        _columnOrder = _configuration.Columns!.Keys.ToList();
+        ResolveDeletedColumn(targetSchema);
+        ResolveColumnOrder(targetSchema);
 
-        List<string> missing = _columnOrder
-            .Concat(_configuration.PrimaryKeys!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        List<KeyValuePair<string, string>> upsertColumns = _columnOrder
+            .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
+            .ToList();
+
+        await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_upsertTable), cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(SqlStatementBuilder.BuildCreateTempTable(_upsertTable, upsertColumns), cancellationToken).ConfigureAwait(false);
+        _upsertBatch = CreateBatchTable(_columnOrder);
+
+        // The delete staging table exists only for hard deletes. With a soft-delete column a
+        // deletion is an UPDATE, which the MERGE already performs from the upsert table.
+        if (_deletedColumn is null)
+        {
+            _deleteTable = SqlStatementBuilder.BuildTempTableName(
+                synchronizationName, SqlStatementBuilder.DeleteSuffix);
+
+            List<KeyValuePair<string, string>> keyColumns = _configuration.PrimaryKeys!
+                .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
+                .ToList();
+
+            await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_deleteTable), cancellationToken).ConfigureAwait(false);
+            await ExecuteAsync(SqlStatementBuilder.BuildCreateTempTable(_deleteTable, keyColumns), cancellationToken).ConfigureAwait(false);
+            _deleteBatch = CreateBatchTable(_configuration.PrimaryKeys!);
+        }
+
+        Logger.LogDebug(
+            "Staging prepared: '{Upsert}' with {Columns} column(s){Delete}.",
+            _upsertTable,
+            _columnOrder.Count,
+            _deleteTable is null ? ", soft delete via MERGE" : $", '{_deleteTable}' for hard deletes");
+    }
+
+    /// <summary>
+    /// Determines the soft-delete column, if the target actually has one.
+    /// </summary>
+    private void ResolveDeletedColumn(IDictionary<string, string> targetSchema)
+    {
+        if (!_configuration!.HasDeletedColumn)
+        {
+            _deletedColumn = null;
+            return;
+        }
+
+        string configured = string.IsNullOrWhiteSpace(_configuration.DeletedColumnName)
+            ? Configuration.DefaultDeletedColumnName
+            : _configuration.DeletedColumnName;
+
+        if (!targetSchema.TryGetValue(configured, out string? _))
+        {
+            throw new InvalidOperationException(
+                $"Soft delete is enabled but column '{configured}' does not exist on target table " +
+                $"'{_configuration.TableName}'.");
+        }
+
+        _deletedColumn = configured;
+    }
+
+    /// <summary>
+    /// Intersects the columns this synchronization requires with the columns the target exposes.
+    /// </summary>
+    private void ResolveColumnOrder(IDictionary<string, string> targetSchema)
+    {
+        List<string> requested = _configuration!.Columns!.Keys.ToList();
+
+        // A configured column the target does not have is dropped rather than fatal: the target
+        // evolves independently of the configuration, and a sync should keep loading what lines up.
+        _columnOrder = requested.Where(targetSchema.ContainsKey).ToList();
+
+        List<string> skipped = requested.Where(name => !targetSchema.ContainsKey(name)).ToList();
+
+        if (skipped.Count > 0)
+        {
+            // Never drop columns silently: a quietly narrowed sync looks like a working one.
+            Logger.LogWarning(
+                "{Count} configured column(s) are not present or not insertable on target table " +
+                "'{TableName}' and will not be synchronized: {Columns}. Computed and rowversion " +
+                "columns cannot be written.",
+                skipped.Count,
+                _configuration.TableName,
+                string.Join(", ", skipped));
+        }
+
+        // The soft-delete column has to be staged so the MERGE can write it, whether or not the
+        // configuration lists it among the data columns.
+        if (_deletedColumn is not null &&
+            !_columnOrder.Contains(_deletedColumn, StringComparer.OrdinalIgnoreCase))
+        {
+            _columnOrder.Add(_deletedColumn);
+        }
+
+        if (_columnOrder.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"No configured column matches target table '{_configuration.TableName}'. " +
+                "Nothing could be synchronized.");
+        }
+
+        // Primary keys are the exception to the intersection. They form the MERGE match
+        // condition, so a missing one cannot be dropped without silently changing which rows
+        // match, turning updates into duplicate inserts.
+        List<string> missingKeys = _configuration.PrimaryKeys!
             .Where(name => !targetSchema.ContainsKey(name))
             .ToList();
 
-        if (missing.Count > 0)
+        if (missingKeys.Count > 0)
         {
-            // Computed and rowversion columns are filtered out of the schema read, so they land
-            // here too. Say so, rather than claiming the column does not exist.
             throw new InvalidOperationException(
-                $"Configured column(s) missing or not insertable on target table " +
-                $"'{_configuration.TableName}': {string.Join(", ", missing)}. " +
-                "Computed and rowversion columns cannot be written and must not be configured.");
+                $"Primary key column(s) missing or not insertable on target table " +
+                $"'{_configuration.TableName}': {string.Join(", ", missingKeys)}. " +
+                "The MERGE match condition cannot be built without them.");
         }
 
-        List<KeyValuePair<string, string>> stagingColumns = _columnOrder
-            .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
-            .ToList();
-
-        List<KeyValuePair<string, string>> keyColumns = _configuration.PrimaryKeys!
-            .Select(name => new KeyValuePair<string, string>(name, targetSchema[name]))
-            .ToList();
-
-        await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_stagingTable), cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_seenKeysTable), cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(SqlStatementBuilder.BuildCreateTempTable(_stagingTable, stagingColumns), cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(SqlStatementBuilder.BuildCreateTempTable(_seenKeysTable, keyColumns), cancellationToken).ConfigureAwait(false);
-
-        _batch = CreateBatchTable(_columnOrder);
-        _seenKeyBatch = CreateBatchTable(_configuration.PrimaryKeys!);
-
-        Logger.LogDebug("Staging tables '{Staging}' and '{Keys}' created.", _stagingTable, _seenKeysTable);
+        foreach (string key in _configuration.PrimaryKeys!)
+        {
+            if (!_columnOrder.Contains(key, StringComparer.OrdinalIgnoreCase))
+                _columnOrder.Add(key);
+        }
     }
 
     /// <summary>
@@ -262,7 +362,7 @@ public class Consumer : Core.Target.Consumer
     }
 
     /// <summary>
-    /// Creates the in-memory batch buffer. All columns are typed as <see cref="object"/> so the
+    /// Creates an in-memory batch buffer. All columns are typed as <see cref="object"/> so the
     /// server performs the conversion during bulk copy, matching the target column types.
     /// </summary>
     private static DataTable CreateBatchTable(IEnumerable<string> columns)
@@ -275,72 +375,115 @@ public class Consumer : Core.Target.Consumer
     }
 
     /// <summary>
-    /// Projects a single entity into the pending batch.
+    /// Routes a single entity into the appropriate batch.
     /// </summary>
     private void AppendToBatch(IEntity entity)
     {
-        if (_configuration?.Columns is null || _batch is null || _seenKeyBatch is null)
+        if (_configuration?.Columns is null || _upsertBatch is null)
             return;
 
-        DataRow row = _batch.NewRow();
+        bool isDeleted = entity.State == EntityState.Deleted;
+
+        // A hard delete is the only case needing separate treatment. A soft delete is an UPDATE
+        // of the timestamp column, so it stages as an ordinary row.
+        if (isDeleted && _deleteBatch is not null)
+        {
+            DataRow keyRow = _deleteBatch.NewRow();
+            for (int i = 0; i < _configuration.PrimaryKeys!.Count; i++)
+                keyRow[i] = ResolveValue(entity, _configuration.PrimaryKeys[i]) ?? DBNull.Value;
+
+            _deleteBatch.Rows.Add(keyRow);
+            return;
+        }
+
+        DataRow row = _upsertBatch.NewRow();
         for (int i = 0; i < _columnOrder.Count; i++)
         {
-            ColumnDefinition definition = _configuration.Columns[_columnOrder[i]];
-            object? value = definition.SourceProperty is null ? null : entity[definition.SourceProperty];
-            row[i] = value ?? DBNull.Value;
+            string column = _columnOrder[i];
+
+            if (_deletedColumn is not null &&
+                string.Equals(column, _deletedColumn, StringComparison.OrdinalIgnoreCase))
+            {
+                // Stamped when the source reports a deletion, cleared otherwise so an entity
+                // reappearing at the source is reinstated rather than staying marked deleted.
+                row[i] = isDeleted ? DateTime.UtcNow : (object)DBNull.Value;
+                continue;
+            }
+
+            row[i] = ResolveValue(entity, column) ?? DBNull.Value;
         }
 
-        _batch.Rows.Add(row);
-
-        DataRow keyRow = _seenKeyBatch.NewRow();
-        for (int i = 0; i < _configuration.PrimaryKeys!.Count; i++)
-        {
-            string keyColumn = _configuration.PrimaryKeys[i];
-            ColumnDefinition? definition = _configuration.Columns.TryGetValue(keyColumn, out ColumnDefinition? found)
-                ? found
-                : null;
-
-            object? value = definition?.SourceProperty is null
-                ? entity[keyColumn]
-                : entity[definition.SourceProperty];
-
-            keyRow[i] = value ?? DBNull.Value;
-        }
-
-        _seenKeyBatch.Rows.Add(keyRow);
+        _upsertBatch.Rows.Add(row);
     }
 
     /// <summary>
-    /// Bulk-copies the pending batch into the staging table, merges it into the target and clears
-    /// the staging table ready for the next batch.
+    /// Reads the entity value backing a target column, honouring the configured source property.
     /// </summary>
-    private async Task FlushBatchAsync(CancellationToken cancellationToken)
+    private object? ResolveValue(IEntity entity, string column)
     {
-        if (_batch is null || _batch.Rows.Count == 0 || _connection is null)
+        if (_configuration!.Columns!.TryGetValue(column, out ColumnDefinition? definition) &&
+            definition.SourceProperty is not null)
+        {
+            return entity[definition.SourceProperty];
+        }
+
+        return entity[column];
+    }
+
+    /// <summary>
+    /// Bulk-copies the pending upserts into staging, merges them into the target and clears the
+    /// staging table ready for the next batch.
+    /// </summary>
+    private async Task FlushUpsertsAsync(CancellationToken cancellationToken)
+    {
+        if (_upsertBatch is null || _upsertBatch.Rows.Count == 0 || _connection is null)
             return;
 
-        int rows = _batch.Rows.Count;
+        int rows = _upsertBatch.Rows.Count;
 
-        await BulkCopyAsync(_batch, _stagingTable!, cancellationToken).ConfigureAwait(false);
-        await BulkCopyAsync(_seenKeyBatch!, _seenKeysTable!, cancellationToken).ConfigureAwait(false);
+        await BulkCopyAsync(_upsertBatch, _upsertTable!, cancellationToken).ConfigureAwait(false);
 
         string merge = SqlStatementBuilder.BuildMerge(
             _configuration!.TableName!,
-            _stagingTable!,
+            _upsertTable!,
             _columnOrder,
             _configuration.PrimaryKeys!);
 
         await ExecuteAsync(merge, cancellationToken).ConfigureAwait(false);
-        await ExecuteAsync(SqlStatementBuilder.BuildTruncate(_stagingTable!), cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(SqlStatementBuilder.BuildTruncate(_upsertTable!), cancellationToken).ConfigureAwait(false);
 
-        _batch.Clear();
-        _seenKeyBatch!.Clear();
-
-        _rowsStaged += rows;
+        _upsertBatch.Clear();
+        _rowsUpserted += rows;
         _batchesFlushed++;
 
-        Logger.LogTrace("Flushed batch {Batch} ({Rows} row(s)) into '{TableName}'.",
-            _batchesFlushed, rows, _configuration.TableName);
+        Logger.LogTrace("Merged batch of {Rows} row(s) into '{TableName}'.", rows, _configuration.TableName);
+    }
+
+    /// <summary>
+    /// Bulk-copies the pending delete keys into staging and removes the matching target rows.
+    /// </summary>
+    private async Task FlushDeletesAsync(CancellationToken cancellationToken)
+    {
+        if (_deleteBatch is null || _deleteBatch.Rows.Count == 0 || _connection is null)
+            return;
+
+        int rows = _deleteBatch.Rows.Count;
+
+        await BulkCopyAsync(_deleteBatch, _deleteTable!, cancellationToken).ConfigureAwait(false);
+
+        string delete = SqlStatementBuilder.BuildDeleteFromStaging(
+            _configuration!.TableName!,
+            _deleteTable!,
+            _configuration.PrimaryKeys!);
+
+        await ExecuteAsync(delete, cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync(SqlStatementBuilder.BuildTruncate(_deleteTable!), cancellationToken).ConfigureAwait(false);
+
+        _deleteBatch.Clear();
+        _rowsDeleted += rows;
+        _batchesFlushed++;
+
+        Logger.LogTrace("Deleted batch of {Rows} row(s) from '{TableName}'.", rows, _configuration.TableName);
     }
 
     /// <summary>
@@ -363,67 +506,6 @@ public class Consumer : Core.Target.Consumer
     }
 
     /// <summary>
-    /// Removes target rows whose keys were not observed during this run, honouring the configured
-    /// threshold. Skipped entirely for delta synchronization, where absence carries no meaning.
-    /// </summary>
-    private async Task ReconcileDeletionsAsync(CancellationToken cancellationToken)
-    {
-        if (_configuration is null || _connection is null)
-            return;
-
-        if (_configuration.Delta)
-        {
-            Logger.LogDebug("Delta synchronization: deletion reconciliation skipped.");
-            return;
-        }
-
-        string? deletedColumn = _configuration.HasDeletedColumn ? _configuration.DeletedColumnName : null;
-
-        string countSql = SqlStatementBuilder.BuildDeleteCandidateCount(
-            _configuration.TableName!, _seenKeysTable!, _configuration.PrimaryKeys!, deletedColumn);
-
-        long totalRows = 0;
-        long candidates = 0;
-
-        await using (SqlCommand countCommand = CreateCommand(countSql))
-        await using (SqlDataReader reader = await countCommand.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
-        {
-            if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-            {
-                totalRows = reader.IsDBNull(0) ? 0 : reader.GetInt64(0);
-                candidates = reader.IsDBNull(1) ? 0 : Convert.ToInt64(reader.GetValue(1));
-            }
-        }
-
-        if (candidates == 0)
-        {
-            Logger.LogInformation("Deletion reconciliation: nothing to remove from '{TableName}'.", _configuration.TableName);
-            return;
-        }
-
-        if (_configuration.Threshold.HasValue && totalRows > 0)
-        {
-            double percentage = candidates * 100d / totalRows;
-            if (percentage > _configuration.Threshold.Value)
-            {
-                throw new InvalidOperationException(
-                    $"Deletion reconciliation aborted for '{_configuration.TableName}': " +
-                    $"{candidates} of {totalRows} row(s) ({percentage:F1}%) would be deleted, " +
-                    $"exceeding the configured threshold of {_configuration.Threshold.Value}%.");
-            }
-        }
-
-        string deleteSql = SqlStatementBuilder.BuildDeleteReconciliation(
-            _configuration.TableName!, _seenKeysTable!, _configuration.PrimaryKeys!, deletedColumn);
-
-        await ExecuteAsync(deleteSql, cancellationToken).ConfigureAwait(false);
-
-        Logger.LogInformation(
-            "Deletion reconciliation removed {Count} of {Total} row(s) from '{TableName}'.",
-            candidates, totalRows, _configuration.TableName);
-    }
-
-    /// <summary>
     /// Drops the staging tables and closes the session connection.
     /// </summary>
     private async ValueTask DisposeSessionAsync()
@@ -435,37 +517,35 @@ public class Consumer : Core.Target.Consumer
         {
             if (_connection.State == ConnectionState.Open)
             {
-                if (_stagingTable is not null)
-                    await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_stagingTable), CancellationToken.None).ConfigureAwait(false);
+                if (_upsertTable is not null)
+                    await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_upsertTable), CancellationToken.None).ConfigureAwait(false);
 
-                if (_seenKeysTable is not null)
-                    await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_seenKeysTable), CancellationToken.None).ConfigureAwait(false);
+                if (_deleteTable is not null)
+                    await ExecuteAsync(SqlStatementBuilder.BuildDropTempTableIfExists(_deleteTable), CancellationToken.None).ConfigureAwait(false);
             }
         }
         catch (SqlException ex)
         {
-            // The session is going away regardless; temp tables die with it.
+            // The session is going away regardless; temporary tables die with it.
             Logger.LogWarning(ex, "Failed to drop staging tables; they are released with the session.");
         }
         finally
         {
             await _connection.DisposeAsync().ConfigureAwait(false);
             _connection = null;
-            _batch?.Dispose();
-            _seenKeyBatch?.Dispose();
-            _batch = null;
-            _seenKeyBatch = null;
+            _upsertBatch?.Dispose();
+            _deleteBatch?.Dispose();
+            _upsertBatch = null;
+            _deleteBatch = null;
         }
     }
 
     private SqlCommand CreateCommand(string sql)
     {
-        SqlCommand command = new SqlCommand(sql, _connection)
+        return new SqlCommand(sql, _connection)
         {
             CommandTimeout = _configuration!.CommandTimeoutSeconds
         };
-
-        return command;
     }
 
     private async Task ExecuteAsync(string sql, CancellationToken cancellationToken)
