@@ -291,6 +291,41 @@ public class SqlStatementBuilderTests
     }
 
     [Test]
+    public void BuildMerge_NeverEmitsNotMatchedBySource()
+    {
+        //Arrange - the source is one batch, not the whole synchronization, so a
+        //BY SOURCE clause would match every row outside the current batch.
+        List<string> allColumns = new List<string> { "Id", "Name" };
+        List<string> keys = new List<string> { "Id" };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildMerge("Users", "#Stage_U", allColumns, keys);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.Not.Contain("NOT MATCHED BY SOURCE").IgnoreCase,
+                "THEN DELETE on this clause empties the table down to the last batch flushed");
+            Assert.That(sql, Does.Not.Contain("DELETE").IgnoreCase,
+                "the batch MERGE must not delete; deletions have their own two paths");
+        });
+    }
+
+    [Test]
+    public void BuildMerge_KeyOnlyTable_StillEmitsNoDeleteClause()
+    {
+        //Arrange - the key-only shape omits UPDATE, which must not tempt a DELETE branch in.
+        List<string> allColumns = new List<string> { "Tenant", "Id" };
+        List<string> keys = new List<string> { "Tenant", "Id" };
+
+        //Act
+        string sql = SqlStatementBuilder.BuildMerge("Links", "#Stage_U", allColumns, keys);
+
+        //Assert
+        Assert.That(sql, Does.Not.Contain("DELETE").IgnoreCase);
+    }
+
+    [Test]
     public void BuildMerge_KeyOnlyTable_OmitsUpdateClause()
     {
         //Arrange — every column is part of the key, so there is nothing to SET.
