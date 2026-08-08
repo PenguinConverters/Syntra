@@ -113,7 +113,47 @@ internal static class SqlStatementBuilder
 
     /// <summary>
     /// Builds the set-based <c>MERGE</c> that moves one staged batch into the target table.
+    /// Emits <c>WHEN MATCHED</c> and <c>WHEN NOT MATCHED BY TARGET</c> only.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>Never add a <c>WHEN NOT MATCHED BY SOURCE</c> clause to this statement.</b>
+    /// </para>
+    /// <para>
+    /// The MERGE target is the whole destination table, but the source is a single <em>batch</em>
+    /// of at most <c>BatchSize</c> rows, not the full result of the synchronization.
+    /// <c>WHEN NOT MATCHED BY SOURCE</c> matches every target row absent from the source, so in a
+    /// per-batch MERGE it matches every row not in the batch currently being flushed. Adding
+    /// <c>THEN DELETE</c> would therefore delete the entire table on the first flush and leave
+    /// only the last batch behind; adding <c>THEN UPDATE</c> would mark every one of those rows
+    /// deleted. The statement is safe today precisely because that clause is absent and the two
+    /// clauses present can only touch rows the batch actually carries.
+    /// </para>
+    /// <para>
+    /// The temptation is real, because it looks like the natural way to make the MERGE perform
+    /// full-sync deletion reconciliation, and reconciliation is still unimplemented. It is not.
+    /// Deletion has two separate paths that are already correct:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>
+    /// Entities the source reports as deleted travel through the staging tables. With a
+    /// soft-delete column that is an ordinary UPDATE applied by this MERGE; without one it is
+    /// <see cref="BuildDeleteFromStaging"/>, whose <c>INNER JOIN</c> against the key-only delete
+    /// staging table can by construction only reach keys the source supplied.
+    /// </item>
+    /// <item>
+    /// Entities that merely stopped being returned are found by full-sync reconciliation in
+    /// <c>Consumer.DeletionTrivialAsync</c>, which compares the target against the composite keys
+    /// observed across the <em>whole</em> run and is threshold-guarded. That comparison needs the
+    /// complete key set, which no single batch has, so it cannot be expressed here.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// If a per-batch MERGE ever does need to reach beyond the staged keys, restrict the target
+    /// first, for example by merging into a common table expression filtered to keys present in
+    /// staging, so no clause can touch a row the batch does not carry.
+    /// </para>
+    /// </remarks>
     /// <param name="targetTable">The destination table name.</param>
     /// <param name="tempTableName">The staging table name.</param>
     /// <param name="allColumns">Every column participating in the merge.</param>
@@ -160,9 +200,16 @@ internal static class SqlStatementBuilder
         string columnList = string.Join(", ", allColumns.Select(QuoteIdentifier));
         string sourceList = string.Join(", ", allColumns.Select(c => $"source.{QuoteIdentifier(c)}"));
 
+        // "BY TARGET" is written out rather than the equivalent bare "WHEN NOT MATCHED" so the
+        // contrast with BY SOURCE is visible at the point someone would edit this list.
         builder.AppendLine("WHEN NOT MATCHED BY TARGET THEN");
         builder.Append("    INSERT (").Append(columnList).AppendLine(")");
         builder.Append("    VALUES (").Append(sourceList).AppendLine(")");
+
+        // Do not add WHEN NOT MATCHED BY SOURCE here. The source is one batch, not the whole
+        // synchronization, so that clause matches every row outside the current batch: THEN
+        // DELETE empties the table down to the last batch flushed. See the remarks on this
+        // method for the two deletion paths that already handle this correctly.
 
         builder.Append(';');
         return builder.ToString();
