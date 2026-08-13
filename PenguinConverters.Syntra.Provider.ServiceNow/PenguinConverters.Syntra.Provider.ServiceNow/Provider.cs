@@ -13,8 +13,14 @@ namespace PenguinConverters.Syntra.Provider.ServiceNow;
 /// </summary>
 public class Provider : Core.Source.Provider
 {
+    #region Fields
+
     private Configuration? _configuration;
     private DateTime? _lastModified;
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the provider configuration.
@@ -24,6 +30,10 @@ public class Provider : Core.Source.Provider
         get => _configuration;
         set => _configuration = value;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Deserializes the raw configuration bytes and applies them to this provider.
@@ -79,4 +89,6 @@ public class Provider : Core.Source.Provider
 
         Logger.LogInformation("ServiceNow retrieval completed.");
     }
+
+    #endregion
 }

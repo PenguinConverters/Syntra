@@ -15,6 +15,8 @@ namespace PenguinConverters.Syntra.Provider.ActiveDirectory;
 /// </summary>
 public class Provider : Core.Source.Provider
 {
+    #region Constants
+
     /// <summary>
     /// LDAP filter pattern for delta sync using uSNChanged attribute.
     /// </summary>
@@ -45,9 +47,17 @@ public class Provider : Core.Source.Provider
     /// </summary>
     public const string LdapUsnCreatedAttribute = "uSNCreated";
 
+    #endregion
+
+    #region Fields
+
     private Configuration? _configuration;
     private State _state = new();
     private bool _hadErrors;
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the provider configuration.
@@ -71,6 +81,10 @@ public class Provider : Core.Source.Provider
     /// Gets a value indicating whether errors occurred during retrieval.
     /// </summary>
     public bool HadErrors => _hadErrors;
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public override async IAsyncEnumerable<IEntity> RetrieveAsync(
@@ -208,4 +222,6 @@ public class Provider : Core.Source.Provider
     {
         return Encoding.UTF8.GetBytes(JsonSerializer.Serialize(_state));
     }
+
+    #endregion
 }

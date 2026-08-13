@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests.Entities;
 [TestFixture]
 public class EntityStateTests
 {
+    #region Methods
+
     [TestCase(EntityState.Unclassified, 0)]
     [TestCase(EntityState.Created, 1)]
     [TestCase(EntityState.Updated, 2)]
@@ -39,4 +41,6 @@ public class EntityStateTests
         //Assert
         Assert.That(actualNames, Is.EquivalentTo(expectedNames));
     }
+
+    #endregion
 }

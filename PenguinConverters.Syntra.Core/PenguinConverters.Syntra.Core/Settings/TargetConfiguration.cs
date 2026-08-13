@@ -5,6 +5,8 @@ namespace PenguinConverters.Syntra.Core.Settings;
 /// </summary>
 public class TargetConfiguration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the assembly name of the consumer connector to load dynamically.
     /// </summary>
@@ -29,4 +31,6 @@ public class TargetConfiguration
     /// Gets or sets the primary key columns used for entity identification.
     /// </summary>
     public List<string> PrimaryKeys { get; set; } = [];
+
+    #endregion
 }

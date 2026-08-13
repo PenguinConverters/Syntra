@@ -15,6 +15,18 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
 /// </remarks>
 internal static class SqlStatementBuilder
 {
+    #region Constants
+
+    /// <summary>Suffix identifying the staging table carrying inserts and updates.</summary>
+    public const string UpsertSuffix = "_U";
+
+    /// <summary>Suffix identifying the staging table carrying source-reported deletions.</summary>
+    public const string DeleteSuffix = "_D";
+
+    #endregion
+
+    #region Methods
+
     /// <summary>
     /// Quotes an identifier for safe interpolation into dynamic SQL, following the same rule as
     /// T-SQL <c>QUOTENAME</c>: wrap in brackets and double any embedded <c>]</c>.
@@ -31,12 +43,6 @@ internal static class SqlStatementBuilder
 
         return string.Concat("[", identifier.Replace("]", "]]"), "]");
     }
-
-    /// <summary>Suffix identifying the staging table carrying inserts and updates.</summary>
-    public const string UpsertSuffix = "_U";
-
-    /// <summary>Suffix identifying the staging table carrying source-reported deletions.</summary>
-    public const string DeleteSuffix = "_D";
 
     /// <summary>
     /// Derives a temporary table name from the synchronization namespace or configuration name.
@@ -353,4 +359,6 @@ internal static class SqlStatementBuilder
         string literal = tempTableName.Replace("'", "''");
         return $"IF OBJECT_ID(N'tempdb..{literal}') IS NOT NULL DROP TABLE {QuoteIdentifier(tempTableName)};";
     }
+
+    #endregion
 }

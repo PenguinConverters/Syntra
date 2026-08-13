@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory.Tests;
 [TestFixture]
 public class UserAccountControlTests
 {
+    #region Methods
+
     [Test]
     public void NormalAccount_HasCorrectValue()
     {
@@ -76,4 +78,6 @@ public class UserAccountControlTests
         //Assert
         Assert.That(actualValue, Is.EqualTo(0));
     }
+
+    #endregion
 }

@@ -9,7 +9,13 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 /// </summary>
 public class ConnectionBuilder
 {
+    #region Fields
+
     private readonly Connection _connection;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ConnectionBuilder"/> class.
@@ -27,6 +33,10 @@ public class ConnectionBuilder
     {
         _connection = new Connection(logger);
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Adds a domain controller hostname or IP address.
@@ -165,4 +175,6 @@ public class ConnectionBuilder
 
         return _connection;
     }
+
+    #endregion
 }

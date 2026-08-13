@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.ServiceNow.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the ServiceNow instance hostname (e.g., "instance.service-now.com").
     /// </summary>
@@ -39,4 +41,6 @@ public class Configuration
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
     public ProtectedString? ClientSecret { get; set; }
+
+    #endregion
 }

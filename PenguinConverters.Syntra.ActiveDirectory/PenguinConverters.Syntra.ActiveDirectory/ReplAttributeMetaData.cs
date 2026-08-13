@@ -9,6 +9,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 [XmlRoot("DS_REPL_ATTR_META_DATA")]
 public class ReplAttributeMetaData
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the attribute name.
     /// </summary>
@@ -51,6 +53,10 @@ public class ReplAttributeMetaData
     [XmlElement("pszLastOriginatingDsaDN")]
     public string? LastOriginatingDsaDn { get; set; }
 
+    #endregion
+
+    #region Methods
+
     /// <summary>
     /// Parses the <see cref="LastOriginatingChangeTime"/> to a <see cref="DateTime"/> value.
     /// </summary>
@@ -76,6 +82,8 @@ public class ReplAttributeMetaData
 
         return null;
     }
+
+    #endregion
 }
 
 /// <summary>
@@ -84,9 +92,13 @@ public class ReplAttributeMetaData
 [XmlRoot("DS_REPL_ATTR_META_DATA_BLOB")]
 public class ReplAttributeMetaDataCollection
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the list of replication attribute metadata entries.
     /// </summary>
     [XmlElement("DS_REPL_ATTR_META_DATA")]
     public List<ReplAttributeMetaData> Entries { get; set; } = [];
+
+    #endregion
 }

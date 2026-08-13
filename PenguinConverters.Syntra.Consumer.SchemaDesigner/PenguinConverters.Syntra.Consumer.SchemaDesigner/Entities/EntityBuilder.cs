@@ -10,13 +10,23 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Entities;
 /// </summary>
 public class EntityBuilder
 {
+    #region Fields
+
     private readonly ConcurrentDictionary<string, Property> _properties = new(StringComparer.OrdinalIgnoreCase);
     private int _entityCount;
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the total number of entities processed by this builder.
     /// </summary>
     public int EntityCount => _entityCount;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Adds an entity's properties to the statistical profile.
@@ -49,4 +59,6 @@ public class EntityBuilder
 
         return columns;
     }
+
+    #endregion
 }

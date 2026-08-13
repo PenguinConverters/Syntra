@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Core.Settings;
 /// </summary>
 public class ProtectedString
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the raw string value. When <see cref="Protected"/> is <c>true</c>,
     /// this contains the Keyra cipher reference rather than plaintext.
@@ -18,6 +20,10 @@ public class ProtectedString
     /// and requires decryption via Keyra.
     /// </summary>
     public bool Protected { get; set; }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Attempts to retrieve the plaintext value, decrypting if necessary.
@@ -41,4 +47,6 @@ public class ProtectedString
     /// Returns the raw value string. Does not decrypt protected values.
     /// </summary>
     public override string ToString() => Protected ? "****" : Value;
+
+    #endregion
 }

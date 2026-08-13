@@ -13,6 +13,8 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Tests.Entities;
 [TestFixture]
 public class EntityBuilderTests
 {
+    #region Methods
+
     [Test]
     public void AddEntity_TracksProperties()
     {
@@ -129,4 +131,6 @@ public class EntityBuilderTests
         Assert.That(columns, Is.Empty);
         Assert.That(builder.EntityCount, Is.EqualTo(0));
     }
+
+    #endregion
 }

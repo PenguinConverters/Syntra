@@ -9,6 +9,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 [XmlRoot("DS_REPL_VALUE_META_DATA")]
 public class ReplValueMetaData
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the attribute name.
     /// </summary>
@@ -77,6 +79,26 @@ public class ReplValueMetaData
     public string? LastOriginatingDsaDn { get; set; }
 
     /// <summary>
+    /// Gets a value indicating whether this value has been deleted.
+    /// </summary>
+    public bool IsDeleted
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(DeletedTime))
+            {
+                return false;
+            }
+
+            return long.TryParse(DeletedTime, out long deletedFileTime) && deletedFileTime > 0;
+        }
+    }
+
+    #endregion
+
+    #region Methods
+
+    /// <summary>
     /// Parses the <see cref="LastOriginatingChangeTime"/> to a <see cref="DateTime"/> value.
     /// </summary>
     /// <returns>The parsed <see cref="DateTime"/>, or <c>null</c> if the value cannot be parsed.</returns>
@@ -102,21 +124,7 @@ public class ReplValueMetaData
         return null;
     }
 
-    /// <summary>
-    /// Gets a value indicating whether this value has been deleted.
-    /// </summary>
-    public bool IsDeleted
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(DeletedTime))
-            {
-                return false;
-            }
-
-            return long.TryParse(DeletedTime, out long deletedFileTime) && deletedFileTime > 0;
-        }
-    }
+    #endregion
 }
 
 /// <summary>
@@ -125,9 +133,13 @@ public class ReplValueMetaData
 [XmlRoot("DS_REPL_VALUE_META_DATA_BLOB")]
 public class ReplValueMetaDataCollection
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the list of replication value metadata entries.
     /// </summary>
     [XmlElement("DS_REPL_VALUE_META_DATA")]
     public List<ReplValueMetaData> Entries { get; set; } = [];
+
+    #endregion
 }

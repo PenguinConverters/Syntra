@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.AzureResources.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Azure AD tenant identifier.
     /// </summary>
@@ -40,4 +42,6 @@ public class Configuration
     /// policyDefinitions, policyAssignments, policyStates, managementGroups.
     /// </summary>
     public List<string>? Endpoints { get; set; }
+
+    #endregion
 }

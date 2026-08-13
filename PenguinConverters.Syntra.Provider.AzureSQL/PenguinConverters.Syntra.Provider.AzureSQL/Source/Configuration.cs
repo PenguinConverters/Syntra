@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.AzureSQL.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the SQL Server connection string.
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
@@ -30,4 +32,6 @@ public class Configuration
     /// Applied during both full and delta synchronization.
     /// </summary>
     public string? WhereClause { get; set; }
+
+    #endregion
 }

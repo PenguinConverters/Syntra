@@ -40,10 +40,16 @@ namespace PenguinConverters.Syntra.Api.Controllers;
 [Authorize]
 public class SyntraController : ControllerBase
 {
+    #region Fields
+
     private readonly ILogger<SyntraController> _logger;
     private readonly DatabaseSettings _dbSettings;
     private readonly ITokenAcquisition _tokenAcquisition;
     private readonly SqlQueryBuilder _queryBuilder = new();
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SyntraController"/> class.
@@ -60,6 +66,10 @@ public class SyntraController : ControllerBase
         _dbSettings = dbSettings.Value;
         _tokenAcquisition = tokenAcquisition;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Queries the specified entity using OData parameters.
@@ -612,4 +622,6 @@ public class SyntraController : ControllerBase
 
         return builder.ToString();
     }
+
+    #endregion
 }

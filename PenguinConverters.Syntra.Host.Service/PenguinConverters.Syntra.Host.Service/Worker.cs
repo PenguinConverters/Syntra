@@ -15,11 +15,17 @@ namespace PenguinConverters.Syntra.Host.Service;
 /// </summary>
 public class Worker : IHostedService, IDisposable
 {
+    #region Fields
+
     private readonly ILogger<Worker> _logger;
     private readonly List<ScheduledJob> _jobs = [];
     private readonly string _configurationDirectory;
     private readonly CancellationTokenSource _stoppingTokenSource = new();
     private bool _disposed;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Worker"/> class.
@@ -30,6 +36,10 @@ public class Worker : IHostedService, IDisposable
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configurationDirectory = Path.Combine(AppContext.BaseDirectory, "Configuration");
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Starts the hosted service by loading all configuration files and scheduling their timers.
@@ -367,6 +377,8 @@ public class Worker : IHostedService, IDisposable
             _disposed = true;
         }
     }
+
+    #endregion
 }
 
 /// <summary>
@@ -374,6 +386,8 @@ public class Worker : IHostedService, IDisposable
 /// </summary>
 internal class ScheduledJob
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the display name of the job.
     /// </summary>
@@ -403,6 +417,8 @@ internal class ScheduledJob
     /// Gets or sets the path to the lease file used for concurrency control.
     /// </summary>
     public string LeaseFilePath { get; set; } = string.Empty;
+
+    #endregion
 }
 
 /// <summary>
@@ -410,6 +426,8 @@ internal class ScheduledJob
 /// </summary>
 internal class ServiceSyncConfiguration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the cron expression defining when the synchronization runs.
     /// </summary>
@@ -424,4 +442,6 @@ internal class ServiceSyncConfiguration
     /// Gets or sets the target consumer configuration.
     /// </summary>
     public TargetConfiguration? Target { get; set; }
+
+    #endregion
 }

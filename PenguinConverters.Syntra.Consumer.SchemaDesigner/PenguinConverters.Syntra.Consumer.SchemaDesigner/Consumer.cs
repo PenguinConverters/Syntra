@@ -15,7 +15,13 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner;
 /// </summary>
 public class Consumer : Core.Target.Consumer
 {
+    #region Fields
+
     private readonly ConcurrentDictionary<string, EntityBuilder> _entityBuilders = new(StringComparer.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public override async Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default)
@@ -83,4 +89,6 @@ public class Consumer : Core.Target.Consumer
         EntityBuilder builder = _entityBuilders.GetOrAdd(tableName, _ => new EntityBuilder());
         builder.AddEntity(entity);
     }
+
+    #endregion
 }

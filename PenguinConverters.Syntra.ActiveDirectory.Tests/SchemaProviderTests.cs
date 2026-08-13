@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory.Tests;
 [TestFixture]
 public class SchemaProviderTests
 {
+    #region Methods
+
     [Test]
     public void EncoderObjectGUID_ConvertsCorrectly()
     {
@@ -106,4 +108,6 @@ public class SchemaProviderTests
         //Assert
         Assert.That(roundTripped, Is.EqualTo(originalGuid));
     }
+
+    #endregion
 }

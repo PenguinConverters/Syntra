@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Tests.Entities;
 [TestFixture]
 public class ColumnTests
 {
+    #region Methods
+
     [Test]
     public void GetTSQLDefinition_Varchar_CorrectOutput()
     {
@@ -166,4 +168,6 @@ public class ColumnTests
         //Assert
         Assert.That(result, Is.EqualTo(column.GetTSQLDefinition()));
     }
+
+    #endregion
 }

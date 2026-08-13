@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Core.Target;
 /// </summary>
 public interface IConsumerBuilder
 {
+    #region Methods
+
     /// <summary>
     /// Adds the serialized configuration for the consumer.
     /// </summary>
@@ -43,4 +45,6 @@ public interface IConsumerBuilder
     /// </summary>
     /// <returns>A fully configured consumer ready for use.</returns>
     IConsumer Build();
+
+    #endregion
 }

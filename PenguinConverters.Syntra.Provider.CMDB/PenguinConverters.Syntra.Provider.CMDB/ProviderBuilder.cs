@@ -9,12 +9,18 @@ namespace PenguinConverters.Syntra.Provider.CMDB;
 /// </summary>
 public class ProviderBuilder : IProviderBuilder
 {
+    #region Fields
+
     private readonly Provider _provider = new();
     private Func<byte[], Type, object>? _deserializer;
     private Func<string, char[]>? _discloser;
     private ILogger? _logger;
     private byte[]? _configuration;
     private byte[]? _metadata;
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public void AddConfiguration(byte[] configuration) => _configuration = configuration;
@@ -51,4 +57,6 @@ public class ProviderBuilder : IProviderBuilder
 
         return _provider;
     }
+
+    #endregion
 }

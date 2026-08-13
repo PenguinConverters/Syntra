@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests.Entities;
 [TestFixture]
 public class EntityTests
 {
+    #region Methods
+
     [Test]
     public void CreateEntity_DefaultState_IsUnclassified()
     {
@@ -110,4 +112,6 @@ public class EntityTests
         //Assert
         Assert.That(result, Is.EqualTo("user-001 [Created]"));
     }
+
+    #endregion
 }

@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 /// </summary>
 public static class LdapConnectionExtensions
 {
+    #region Methods
+
     /// <summary>
     /// Sends an LDAP request asynchronously and returns the directory response.
     /// </summary>
@@ -102,6 +104,10 @@ public static class LdapConnectionExtensions
                 $"Expected an LDAP response of type '{typeof(TResponse).Name}' but received '{response?.GetType().Name ?? "null"}'.");
     }
 
+    #endregion
+
+    #region Nested Types
+
     /// <summary>
     /// Carries the state needed to abort a pending request when its cancellation token fires.
     /// </summary>
@@ -110,4 +116,6 @@ public static class LdapConnectionExtensions
         IAsyncResult AsyncResult,
         TaskCompletionSource<DirectoryResponse> Completion,
         CancellationToken CancellationToken);
+
+    #endregion
 }

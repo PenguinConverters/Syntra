@@ -9,6 +9,8 @@ namespace PenguinConverters.Syntra.Core;
 /// </summary>
 public class HandlerBuilder
 {
+    #region Fields
+
     private Configuration? _configuration;
     private byte[]? _sourceMetadata;
     private byte[]? _targetMetadata;
@@ -16,6 +18,10 @@ public class HandlerBuilder
     private Func<string, char[]>? _discloser;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _publicKey;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Sets the synchronization configuration.
@@ -113,4 +119,6 @@ public class HandlerBuilder
             _logger,
             _publicKey);
     }
+
+    #endregion
 }

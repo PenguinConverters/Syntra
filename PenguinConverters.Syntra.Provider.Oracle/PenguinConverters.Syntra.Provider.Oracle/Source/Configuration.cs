@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Provider.Oracle.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Oracle database connection string.
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
@@ -22,4 +24,6 @@ public class Configuration
     /// Gets or sets the SQL query to execute against the Oracle database.
     /// </summary>
     public string? Query { get; set; }
+
+    #endregion
 }

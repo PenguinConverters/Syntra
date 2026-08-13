@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Core.Settings;
 /// </summary>
 public class CertificateSettings
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the certificate store name (e.g., <c>My</c>, <c>Root</c>).
     /// </summary>
@@ -31,4 +33,6 @@ public class CertificateSettings
     /// Gets or sets the password for the certificate file, if applicable.
     /// </summary>
     public ProtectedString? Password { get; set; }
+
+    #endregion
 }

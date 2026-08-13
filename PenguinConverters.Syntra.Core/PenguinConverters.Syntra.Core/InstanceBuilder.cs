@@ -13,6 +13,8 @@ namespace PenguinConverters.Syntra.Core;
 /// <typeparam name="T">The builder interface type: <see cref="IProviderBuilder"/> or <see cref="IConsumerBuilder"/>.</typeparam>
 public class InstanceBuilder<T> where T : class
 {
+    #region Fields
+
     private readonly string _assemblyName;
     private byte[]? _configuration;
     private byte[]? _metadata;
@@ -20,6 +22,10 @@ public class InstanceBuilder<T> where T : class
     private Func<string, char[]>? _discloser;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _expectedPublicKey;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="InstanceBuilder{T}"/> class.
@@ -33,6 +39,10 @@ public class InstanceBuilder<T> where T : class
 
         _assemblyName = assemblyName;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Sets the serialized configuration bytes.
@@ -196,4 +206,6 @@ public class InstanceBuilder<T> where T : class
                 consumerBuilder.AddDiscloser(_discloser);
         }
     }
+
+    #endregion
 }

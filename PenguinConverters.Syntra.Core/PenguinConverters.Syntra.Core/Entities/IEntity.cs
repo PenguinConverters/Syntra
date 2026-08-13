@@ -5,6 +5,8 @@ namespace PenguinConverters.Syntra.Core.Entities;
 /// </summary>
 public interface IEntity
 {
+    #region Properties
+
     /// <summary>
     /// Gets the unique identifier for this entity, typically a composite key value.
     /// </summary>
@@ -20,10 +22,16 @@ public interface IEntity
     /// </summary>
     IDictionary<string, object?> Properties { get; }
 
+    #endregion
+
+    #region Indexers
+
     /// <summary>
     /// Gets or sets a property value by name.
     /// </summary>
     /// <param name="propertyName">The name of the property.</param>
     /// <returns>The property value, or <c>null</c> if not set.</returns>
     object? this[string propertyName] { get; set; }
+
+    #endregion
 }

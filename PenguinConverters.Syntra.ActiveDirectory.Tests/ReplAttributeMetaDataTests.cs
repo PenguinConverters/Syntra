@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory.Tests;
 [TestFixture]
 public class ReplAttributeMetaDataTests
 {
+    #region Methods
+
     [Test]
     public void Deserialization_FromXml_Works()
     {
@@ -106,4 +108,6 @@ public class ReplAttributeMetaDataTests
         Assert.That(metaData.OriginatingChangeUsn, Is.EqualTo(0));
         Assert.That(metaData.LocalChangeUsn, Is.EqualTo(0));
     }
+
+    #endregion
 }

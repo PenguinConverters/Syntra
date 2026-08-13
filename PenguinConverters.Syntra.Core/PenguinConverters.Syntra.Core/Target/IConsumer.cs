@@ -7,10 +7,16 @@ namespace PenguinConverters.Syntra.Core.Target;
 /// </summary>
 public interface IConsumer
 {
+    #region Properties
+
     /// <summary>
     /// Gets a value indicating whether errors occurred during synchronization.
     /// </summary>
     bool HadErrors { get; }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Asynchronously synchronizes entities from the given provider to the target system.
@@ -27,4 +33,6 @@ public interface IConsumer
     /// <param name="cancellationToken">A token to signal cancellation of the finalization.</param>
     /// <returns>A task that completes when finalization has finished.</returns>
     Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default);
+
+    #endregion
 }

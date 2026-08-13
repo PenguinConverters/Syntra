@@ -25,9 +25,15 @@ namespace PenguinConverters.Syntra.Api.Controllers;
 [AllowAnonymous]
 public class OpenApiController : ControllerBase
 {
+    #region Fields
+
     private readonly ILogger<OpenApiController> _logger;
     private readonly DatabaseSettings _dbSettings;
     private readonly ITokenAcquisition _tokenAcquisition;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="OpenApiController"/> class.
@@ -44,6 +50,10 @@ public class OpenApiController : ControllerBase
         _dbSettings = dbSettings.Value;
         _tokenAcquisition = tokenAcquisition;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Returns a dynamically generated OpenAPI 3.0 specification as JSON.
@@ -707,6 +717,10 @@ public class OpenApiController : ControllerBase
         return connection;
     }
 
+    #endregion
+
+    #region Nested Types
+
     private sealed class EntityInfo
     {
         public string Name { get; set; } = string.Empty;
@@ -735,4 +749,6 @@ public class OpenApiController : ControllerBase
         public int? MaxLength { get; set; }
         public bool IsNullable { get; set; }
     }
+
+    #endregion
 }

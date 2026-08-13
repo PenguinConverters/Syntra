@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.ActiveDirectory.Source;
 /// </summary>
 public class Configuration
 {
+    #region Constants
+
     /// <summary>
     /// Default LDAP port for SSL connections.
     /// </summary>
@@ -27,6 +29,10 @@ public class Configuration
     /// Default LDAP page size for paged result queries.
     /// </summary>
     public const int DefaultPageSize = 300;
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the base distinguished name for LDAP queries.
@@ -101,6 +107,8 @@ public class Configuration
     /// or other multi-valued attributes.
     /// </summary>
     public List<Relationship>? Relationships { get; set; }
+
+    #endregion
 }
 
 /// <summary>
@@ -108,6 +116,8 @@ public class Configuration
 /// </summary>
 public class Relationship
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the LDAP filter template for resolving the relationship.
     /// </summary>
@@ -117,4 +127,6 @@ public class Relationship
     /// Gets or sets the attribute name to load from related objects.
     /// </summary>
     public string? Attribute { get; set; }
+
+    #endregion
 }

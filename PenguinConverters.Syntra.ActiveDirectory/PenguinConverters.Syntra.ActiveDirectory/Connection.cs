@@ -15,9 +15,15 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 /// </summary>
 public class Connection : IDisposable
 {
+    #region Fields
+
     private LdapConnection? _ldapConnection;
     private bool _disposed;
     private readonly ILogger _logger;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Connection"/> class.
@@ -35,6 +41,10 @@ public class Connection : IDisposable
     {
         _logger = logger ?? NullLogger.Instance;
     }
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the base distinguished name for LDAP searches.
@@ -97,6 +107,10 @@ public class Connection : IDisposable
     /// Used as a fallback when no name-specific encoder is found.
     /// </summary>
     public Dictionary<string, Func<byte[], object?>> EncodersByType { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Asynchronously streams directory entries matching the specified LDAP filter using paged search.
@@ -552,4 +566,6 @@ public class Connection : IDisposable
             _disposed = true;
         }
     }
+
+    #endregion
 }

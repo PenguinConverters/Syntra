@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL.Tests.Target;
 [TestFixture]
 public class SqlStatementBuilderTests
 {
+    #region Methods
+
     [Test]
     public void QuoteIdentifier_WrapsInBrackets()
     {
@@ -553,4 +555,6 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.That(sql, Does.Contain("N'tempdb..#Sta''ge'"));
     }
+
+    #endregion
 }

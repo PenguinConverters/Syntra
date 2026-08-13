@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Provider.Ciphersuite.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Ciphersuite server hostname.
     /// </summary>
@@ -22,4 +24,6 @@ public class Configuration
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
     public ProtectedString? ApiKey { get; set; }
+
+    #endregion
 }

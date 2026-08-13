@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.EntraID.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Azure AD tenant identifier.
     /// </summary>
@@ -34,6 +36,8 @@ public class Configuration
     /// Supports placeholder resolution using <c>&lt;%objectId%&gt;</c> syntax.
     /// </summary>
     public List<RelationshipDefinition>? Relationships { get; set; }
+
+    #endregion
 }
 
 /// <summary>
@@ -41,6 +45,8 @@ public class Configuration
 /// </summary>
 public class RelationshipDefinition
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Graph API endpoint template for the relationship.
     /// May include placeholders like <c>&lt;%objectId%&gt;</c> that are resolved per entity.
@@ -51,4 +57,6 @@ public class RelationshipDefinition
     /// Gets or sets the property name to store the resolved relationship data.
     /// </summary>
     public string? Property { get; set; }
+
+    #endregion
 }

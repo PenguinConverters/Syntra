@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.CMDB.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the CMDB system hostname.
     /// </summary>
@@ -34,4 +36,6 @@ public class Configuration
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
     public ProtectedString? Password { get; set; }
+
+    #endregion
 }

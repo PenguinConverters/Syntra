@@ -17,6 +17,8 @@ namespace PenguinConverters.Syntra.Api;
 /// </summary>
 public static class Program
 {
+    #region Methods
+
     /// <summary>
     /// Application entry point.
     /// </summary>
@@ -169,4 +171,6 @@ public static class Program
 
         app.Run();
     }
+
+    #endregion
 }
