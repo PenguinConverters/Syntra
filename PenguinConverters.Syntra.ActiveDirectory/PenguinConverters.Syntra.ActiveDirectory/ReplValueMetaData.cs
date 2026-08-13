@@ -9,6 +9,23 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 [XmlRoot("DS_REPL_VALUE_META_DATA")]
 public class ReplValueMetaData
 {
+    #region Constants
+
+    /// <summary>
+    /// The constructed attribute that exposes value-level replication metadata on a directory object.
+    /// It is only returned when requested explicitly, and its values must be read through range
+    /// retrieval because an object may carry more link values than a single response can hold.
+    /// </summary>
+    public const string Attribute = "msDS-ReplValueMetaData";
+
+    #endregion
+
+    #region Fields
+
+    private static readonly XmlSerializer Serializer = new XmlSerializer(typeof(ReplValueMetaData));
+
+    #endregion
+
     #region Properties
 
     /// <summary>
@@ -97,6 +114,37 @@ public class ReplValueMetaData
     #endregion
 
     #region Methods
+
+    /// <summary>
+    /// Attempts to parse a single <c>msDS-ReplValueMetaData</c> value.
+    /// </summary>
+    /// <param name="value">The XML fragment of one metadata entry.</param>
+    /// <param name="metaData">
+    /// When this method returns, contains the parsed metadata, or <c>null</c> when parsing failed.
+    /// </param>
+    /// <returns><c>true</c> if the value was parsed; otherwise, <c>false</c>.</returns>
+    public static bool TryParse(string? value, out ReplValueMetaData? metaData)
+    {
+        metaData = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        try
+        {
+            using StringReader reader = new StringReader(value);
+            metaData = (ReplValueMetaData?)Serializer.Deserialize(reader);
+
+            return metaData is not null;
+        }
+        catch (InvalidOperationException)
+        {
+            // Every deserialization failure surfaces wrapped in InvalidOperationException.
+            return false;
+        }
+    }
 
     /// <summary>
     /// Parses the <see cref="LastOriginatingChangeTime"/> to a <see cref="DateTime"/> value.
