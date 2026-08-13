@@ -12,8 +12,14 @@ namespace PenguinConverters.Syntra.ActiveDirectory;
 /// </summary>
 public class SchemaProvider
 {
+    #region Fields
+
     private readonly Connection _connection;
     private readonly ILogger _logger;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SchemaProvider"/> class.
@@ -25,6 +31,10 @@ public class SchemaProvider
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _logger = logger ?? NullLogger.Instance;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Asynchronously queries the AD schema to build a dictionary of attribute decoders.
@@ -331,4 +341,6 @@ public class SchemaProvider
     {
         return Encoding.UTF8.GetBytes(value.ToString());
     }
+
+    #endregion
 }

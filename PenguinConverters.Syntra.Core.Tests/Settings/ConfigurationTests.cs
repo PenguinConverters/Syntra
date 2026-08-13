@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests.Settings;
 [TestFixture]
 public class ConfigurationTests
 {
+    #region Methods
+
     [Test]
     public void DefaultValues_AreCorrect()
     {
@@ -83,4 +85,6 @@ public class ConfigurationTests
         //Assert
         Assert.That(configuration.MaxDegreeOfParallelism, Is.EqualTo(8));
     }
+
+    #endregion
 }

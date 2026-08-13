@@ -30,6 +30,8 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL;
 /// </remarks>
 public class Consumer : Core.Target.Consumer
 {
+    #region Fields
+
     private Configuration? _configuration;
 
     private readonly ConcurrentBag<string> _compositeKeys = new();
@@ -45,6 +47,10 @@ public class Consumer : Core.Target.Consumer
     private long _rowsDeleted;
     private long _batchesFlushed;
 
+    #endregion
+
+    #region Properties
+
     /// <summary>
     /// Gets or sets the consumer configuration.
     /// </summary>
@@ -53,6 +59,10 @@ public class Consumer : Core.Target.Consumer
         get => _configuration;
         set => _configuration = value;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Deserializes the raw configuration bytes and applies them to this consumer.
@@ -625,4 +635,6 @@ public class Consumer : Core.Target.Consumer
         await using SqlCommand command = CreateCommand(sql);
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    #endregion
 }

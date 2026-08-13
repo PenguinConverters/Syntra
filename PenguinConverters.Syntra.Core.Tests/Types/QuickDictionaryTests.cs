@@ -13,6 +13,8 @@ namespace PenguinConverters.Syntra.Core.Tests.Types;
 [TestFixture]
 public class QuickDictionaryTests
 {
+    #region Methods
+
     [Test]
     public void Default_UsesOrdinalComparer()
     {
@@ -589,4 +591,6 @@ public class QuickDictionaryTests
         //Assert
         Assert.That(found, Is.EqualTo(entryCount));
     }
+
+    #endregion
 }

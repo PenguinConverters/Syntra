@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.Exchange.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Azure AD tenant identifier.
     /// </summary>
@@ -29,4 +31,6 @@ public class Configuration
     /// (e.g., "/users/{id}/mailFolders", "/users/{id}/messages").
     /// </summary>
     public string? EndPoint { get; set; }
+
+    #endregion
 }

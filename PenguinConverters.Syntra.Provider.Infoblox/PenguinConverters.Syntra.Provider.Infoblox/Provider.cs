@@ -7,9 +7,13 @@ namespace PenguinConverters.Syntra.Provider.Infoblox;
 /// </summary>
 public class Provider : Core.Source.Provider
 {
+    #region Methods
+
     /// <inheritdoc />
     public override IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException("Infoblox provider is not yet implemented.");
     }
+
+    #endregion
 }

@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.ActiveDirectory.Tests;
 [TestFixture]
 public class ConnectionBuilderTests
 {
+    #region Methods
+
     [Test]
     public void AddDomainController_StoresValue()
     {
@@ -139,4 +141,6 @@ public class ConnectionBuilderTests
         //Assert
         Assert.Throws<InvalidOperationException>(action);
     }
+
+    #endregion
 }

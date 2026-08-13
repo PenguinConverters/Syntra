@@ -6,6 +6,8 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Entities;
 /// </summary>
 public class Column
 {
+    #region Constructors
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Column"/> class.
     /// </summary>
@@ -14,6 +16,10 @@ public class Column
     {
         Name = name;
     }
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the column name.
@@ -35,6 +41,10 @@ public class Column
     /// Gets or sets a value indicating whether the column allows NULL values.
     /// </summary>
     public bool IsNullable { get; set; } = true;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Calculates the appropriate SQL length specification based on the observed maximum length.
@@ -114,6 +124,8 @@ public class Column
     /// Returns a string representation of this column definition.
     /// </summary>
     public override string ToString() => GetTSQLDefinition();
+
+    #endregion
 }
 
 /// <summary>

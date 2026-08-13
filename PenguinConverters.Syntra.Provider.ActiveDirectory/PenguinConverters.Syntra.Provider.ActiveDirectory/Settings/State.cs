@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Provider.ActiveDirectory.Settings;
 /// </summary>
 public class State
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the highest committed USN from the domain controller
     /// at the time of the last successful synchronization.
@@ -28,4 +30,6 @@ public class State
     /// Gets the UTC timestamp when this state was recorded.
     /// </summary>
     public DateTime DateTime => DateTime.UtcNow;
+
+    #endregion
 }

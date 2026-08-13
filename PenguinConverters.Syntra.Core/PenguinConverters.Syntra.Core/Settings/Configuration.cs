@@ -5,6 +5,8 @@ namespace PenguinConverters.Syntra.Core.Settings;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the source connector configuration.
     /// </summary>
@@ -48,4 +50,6 @@ public class Configuration
     /// In this mode, the consumer generates schema information instead of writing data.
     /// </summary>
     public bool SchemaDesigner { get; set; }
+
+    #endregion
 }

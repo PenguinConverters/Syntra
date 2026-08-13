@@ -14,14 +14,24 @@ namespace PenguinConverters.Syntra.Consumer.ActiveDirectory;
 /// </summary>
 public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
 {
+    #region Constants
+
     /// <summary>
     /// The distinguishedName attribute constant.
     /// </summary>
     public const string DistinguishedNameAttribute = "distinguishedName";
 
+    #endregion
+
+    #region Fields
+
     private Configuration? _configuration;
     private readonly ConcurrentQueue<string> _compositeKeys = new();
     private readonly ConcurrentDictionary<string, string?> _filtersFound = new(StringComparer.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the consumer configuration.
@@ -31,6 +41,10 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
         get => _configuration;
         set => _configuration = value;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Deserializes the raw configuration bytes and applies them to this consumer.
@@ -161,4 +175,6 @@ public class Consumer : Core.Target.Consumer, Core.Target.ISynchronizable
 
         Logger.LogTrace("Deletion reconciliation completed for '{BaseDN}'.", _configuration.BaseDN);
     }
+
+    #endregion
 }

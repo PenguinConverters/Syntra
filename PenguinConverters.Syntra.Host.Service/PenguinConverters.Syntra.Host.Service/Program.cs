@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Host.Service;
 /// </summary>
 public static class Program
 {
+    #region Methods
+
     /// <summary>
     /// Configures and starts the generic host with Windows Service and systemd support.
     /// </summary>
@@ -25,4 +27,6 @@ public static class Program
         IHost host = hostBuilder.Build();
         host.Run();
     }
+
+    #endregion
 }

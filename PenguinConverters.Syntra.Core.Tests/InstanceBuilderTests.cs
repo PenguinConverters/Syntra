@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests;
 [TestFixture]
 public class InstanceBuilderTests
 {
+    #region Methods
+
     [Test]
     public void Build_WithNullAssemblyName_ThrowsArgumentException()
     {
@@ -88,4 +90,6 @@ public class InstanceBuilderTests
         //Assert
         Assert.That(result, Is.SameAs(builder));
     }
+
+    #endregion
 }

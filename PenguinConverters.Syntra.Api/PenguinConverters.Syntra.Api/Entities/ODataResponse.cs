@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Api.Entities;
 /// <typeparam name="T">The type of elements in the value collection.</typeparam>
 public sealed class ODataResponse<T>
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the OData context URL.
     /// </summary>
@@ -34,6 +36,8 @@ public sealed class ODataResponse<T>
     /// </summary>
     [JsonPropertyName("value")]
     public IReadOnlyList<T> Value { get; set; } = [];
+
+    #endregion
 }
 
 /// <summary>
@@ -41,6 +45,8 @@ public sealed class ODataResponse<T>
 /// </summary>
 public sealed class ODataResponse
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the OData context URL.
     /// </summary>
@@ -67,4 +73,6 @@ public sealed class ODataResponse
     /// </summary>
     [JsonPropertyName("value")]
     public IReadOnlyList<IDictionary<string, object?>> Value { get; set; } = [];
+
+    #endregion
 }

@@ -9,6 +9,8 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
 /// </summary>
 public class Configuration
 {
+    #region Constants
+
     /// <summary>
     /// Default maximum degree of parallelism for MERGE operations.
     /// </summary>
@@ -28,6 +30,10 @@ public class Configuration
     /// Default name of the soft-delete column when <see cref="HasDeletedColumn"/> is set.
     /// </summary>
     public const string DefaultDeletedColumnName = "Deleted";
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the SQL Server connection string.
@@ -121,6 +127,8 @@ public class Configuration
     /// to store a JSON snapshot of the source entity for audit purposes.
     /// </summary>
     public bool ShadowColumn { get; set; }
+
+    #endregion
 }
 
 /// <summary>
@@ -128,6 +136,8 @@ public class Configuration
 /// </summary>
 public class ColumnDefinition
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the SQL data type for this column (e.g., "nvarchar(255)", "int").
     /// </summary>
@@ -149,4 +159,6 @@ public class ColumnDefinition
     /// Gets or sets a value indicating whether this column is part of the primary key.
     /// </summary>
     public bool IsPrimaryKey { get; set; }
+
+    #endregion
 }

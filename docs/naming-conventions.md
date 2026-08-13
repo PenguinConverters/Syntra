@@ -218,6 +218,58 @@ Every `SP_S1FE_*_READ` procedure accepts `@metadata INT = 0`:
 - Configuration classes named `Configuration` in their respective namespace
 - Test classes suffixed with `Tests` (e.g., `EntityTests`, `ConnectionBuilderTests`)
 
+### Member Regions
+
+Every type groups its members into `#region` blocks named after the **member type**, so any
+file can be collapsed to its structure and scanned the same way. Emit only the regions a type
+actually needs — never an empty region — and use this order:
+
+| Order | Region | Contains |
+|-------|--------|----------|
+| 1 | `#region Constants` | `const` fields |
+| 2 | `#region Fields` | instance and `static readonly` fields |
+| 3 | `#region Constructors` | instance constructors, static constructors, finalizers |
+| 4 | `#region Properties` | properties, including auto-properties |
+| 5 | `#region Indexers` | `this[...]` members |
+| 6 | `#region Events` | `event` members |
+| 7 | `#region Methods` | all methods, including operators and `[GeneratedRegex]` partials |
+| 8 | `#region Nested Types` | nested classes, structs, records, enums |
+
+Rules:
+- Region names are **singular in meaning, plural in form** and spelled exactly as above,
+  in Title Case. `Nested Types` takes two words.
+- Applies to classes, structs, records and interfaces. Enums and file-scoped top-level
+  statements take no regions — they have a single member kind.
+- Where a file declares several types, each type carries its own regions.
+- Blank line after `#region` and before `#endregion`.
+- A type whose layout is driven by the contracts it implements rather than by member kind —
+  `QuickDictionary` is the one such case — may keep contract-named regions instead
+  (`Enumeration`, `Non-generic IDictionary`), because splitting them by member type would
+  scatter each interface implementation.
+
+```csharp
+public class Handler
+{
+    #region Fields
+
+    private readonly ILogger _logger;
+
+    #endregion
+
+    #region Constructors
+
+    internal Handler(ILogger logger) => _logger = logger;
+
+    #endregion
+
+    #region Methods
+
+    public Task SynchronizeAsync(CancellationToken cancellationToken = default) { }
+
+    #endregion
+}
+```
+
 ### Interface Pattern
 ```
 IProvider         → Provider (abstract base) → {System}Provider (concrete)

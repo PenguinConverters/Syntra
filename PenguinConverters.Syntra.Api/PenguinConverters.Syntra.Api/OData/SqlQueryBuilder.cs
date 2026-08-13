@@ -22,13 +22,23 @@ namespace PenguinConverters.Syntra.Api.OData;
 /// </remarks>
 public sealed partial class SqlQueryBuilder
 {
+    #region Fields
+
     private readonly FilterParser _filterParser = new();
     private readonly List<SqlParameter> _parameters = [];
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the SQL parameters generated during query building.
     /// </summary>
     public IReadOnlyList<SqlParameter> Parameters => _parameters;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Builds a SQL SELECT statement from OData query parameters targeting a view or stored procedure.
@@ -255,4 +265,6 @@ public sealed partial class SqlQueryBuilder
 
     [GeneratedRegex(@"[^A-Za-z0-9_.]")]
     private static partial Regex ObjectNameCleanupPattern();
+
+    #endregion
 }

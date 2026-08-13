@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.Core.Target;
 /// </summary>
 public abstract class Consumer : IConsumer
 {
+    #region Properties
+
     /// <summary>
     /// Gets the logger instance for diagnostic output.
     /// </summary>
@@ -37,6 +39,10 @@ public abstract class Consumer : IConsumer
 
     /// <inheritdoc />
     public virtual bool HadErrors { get; protected set; }
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public abstract Task SynchronizeAsync(IProvider provider, CancellationToken cancellationToken = default);
@@ -114,4 +120,6 @@ public abstract class Consumer : IConsumer
 
         return (T)Deserializer(RawMetadata, typeof(T));
     }
+
+    #endregion
 }

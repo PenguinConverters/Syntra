@@ -8,7 +8,13 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Extensions;
 /// </summary>
 public class ConsoleWriter
 {
+    #region Fields
+
     private readonly StringBuilder _buffer = new();
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Writes a line of text to the buffer.
@@ -68,4 +74,6 @@ public class ConsoleWriter
     /// </summary>
     /// <returns>The buffered text.</returns>
     public override string ToString() => _buffer.ToString();
+
+    #endregion
 }

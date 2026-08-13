@@ -9,12 +9,18 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL;
 /// </summary>
 public class ConsumerBuilder : IConsumerBuilder
 {
+    #region Fields
+
     private readonly Consumer _consumer = new();
     private Func<byte[], Type, object>? _deserializer;
     private Func<string, char[]>? _discloser;
     private ILogger? _logger;
     private byte[]? _configuration;
     private byte[]? _metadata;
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public void AddConfiguration(byte[] configuration) => _configuration = configuration;
@@ -49,4 +55,6 @@ public class ConsumerBuilder : IConsumerBuilder
 
         return _consumer;
     }
+
+    #endregion
 }

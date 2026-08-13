@@ -5,10 +5,16 @@ namespace PenguinConverters.Syntra.Api.Settings;
 /// </summary>
 public sealed class DatabaseSettings
 {
+    #region Constants
+
     /// <summary>
     /// Configuration section name in appsettings.json.
     /// </summary>
     public const string SectionName = "Database";
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the SQL Server connection string.
@@ -50,4 +56,6 @@ public sealed class DatabaseSettings
     /// Gets or sets the maximum number of rows returned when no $top is specified.
     /// </summary>
     public int DefaultMaxRows { get; set; } = 10000;
+
+    #endregion
 }

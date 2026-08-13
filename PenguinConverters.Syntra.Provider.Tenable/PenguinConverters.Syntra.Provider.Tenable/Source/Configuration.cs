@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Provider.Tenable.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Tenable.io API hostname.
     /// </summary>
@@ -23,4 +25,6 @@ public class Configuration
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
     public ProtectedString? SecretKey { get; set; }
+
+    #endregion
 }

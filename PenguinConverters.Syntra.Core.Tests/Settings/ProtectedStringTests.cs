@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests.Settings;
 [TestFixture]
 public class ProtectedStringTests
 {
+    #region Methods
+
     [Test]
     public void TryGetValue_Unprotected_ReturnsPlaintext()
     {
@@ -115,4 +117,6 @@ public class ProtectedStringTests
         //Assert
         Assert.That(result, Is.EqualTo("plainValue"));
     }
+
+    #endregion
 }

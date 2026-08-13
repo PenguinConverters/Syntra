@@ -6,6 +6,8 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Entities;
 /// </summary>
 public class Property
 {
+    #region Fields
+
     private int _observationCount;
     private int _nullCount;
     private int _maxLength;
@@ -21,6 +23,10 @@ public class Property
     private long _minIntValue = long.MaxValue;
     private long _maxIntValue = long.MinValue;
 
+    #endregion
+
+    #region Constructors
+
     /// <summary>
     /// Initializes a new instance of the <see cref="Property"/> class.
     /// </summary>
@@ -29,6 +35,10 @@ public class Property
     {
         Name = name;
     }
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the property name.
@@ -54,6 +64,10 @@ public class Property
     /// Gets a value indicating whether any observed values contained non-ASCII Unicode characters.
     /// </summary>
     public bool HasUnicode => _hasUnicode;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Records an observation of a property value, updating the statistical profile.
@@ -232,4 +246,6 @@ public class Property
         }
         while (Interlocked.CompareExchange(ref _maxIntValue, value, current) != current);
     }
+
+    #endregion
 }

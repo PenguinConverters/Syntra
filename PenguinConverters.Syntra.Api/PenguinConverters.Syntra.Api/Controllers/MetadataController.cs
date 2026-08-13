@@ -24,12 +24,18 @@ namespace PenguinConverters.Syntra.Api.Controllers;
 [Authorize]
 public class MetadataController : ControllerBase
 {
+    #region Fields
+
     private static readonly XNamespace EdmxNamespace = "http://docs.oasis-open.org/odata/ns/edmx";
     private static readonly XNamespace EdmNamespace = "http://docs.oasis-open.org/odata/ns/edm";
 
     private readonly ILogger<MetadataController> _logger;
     private readonly DatabaseSettings _dbSettings;
     private readonly ITokenAcquisition _tokenAcquisition;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MetadataController"/> class.
@@ -46,6 +52,10 @@ public class MetadataController : ControllerBase
         _dbSettings = dbSettings.Value;
         _tokenAcquisition = tokenAcquisition;
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Returns the OData $metadata document (CSDL) describing all available entity types
@@ -298,6 +308,10 @@ public class MetadataController : ControllerBase
         return connection;
     }
 
+    #endregion
+
+    #region Nested Types
+
     /// <summary>
     /// Represents column metadata from INFORMATION_SCHEMA.COLUMNS.
     /// </summary>
@@ -311,4 +325,6 @@ public class MetadataController : ControllerBase
         public int? NumericScale { get; set; }
         public int OrdinalPosition { get; set; }
     }
+
+    #endregion
 }

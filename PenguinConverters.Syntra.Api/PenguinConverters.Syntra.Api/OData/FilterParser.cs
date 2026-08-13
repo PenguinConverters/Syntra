@@ -19,13 +19,23 @@ namespace PenguinConverters.Syntra.Api.OData;
 /// </remarks>
 public sealed partial class FilterParser
 {
+    #region Fields
+
     private int _parameterIndex;
     private readonly List<SqlParameter> _parameters = [];
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets the SQL parameters generated during parsing.
     /// </summary>
     public IReadOnlyList<SqlParameter> Parameters => _parameters;
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Parses an OData $filter expression into a parameterized SQL WHERE clause.
@@ -289,4 +299,6 @@ public sealed partial class FilterParser
 
     [GeneratedRegex(@"[^A-Za-z0-9_]")]
     private static partial Regex IdentifierPattern();
+
+    #endregion
 }

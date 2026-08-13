@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Provider.DevOps.Source;
 /// </summary>
 public class Configuration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the Azure DevOps organization name.
     /// </summary>
@@ -23,4 +25,6 @@ public class Configuration
     /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
     /// </summary>
     public ProtectedString? PAT { get; set; }
+
+    #endregion
 }

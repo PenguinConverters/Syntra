@@ -24,7 +24,7 @@ public sealed class QuickDictionary :
     IReadOnlyDictionary<string, object?>,
     IDictionary
 {
-    #region Nested types
+    #region Nested Types
 
     private struct Entry
     {
@@ -46,9 +46,13 @@ public sealed class QuickDictionary :
 
     #endregion
 
-    #region Fields
+    #region Constants
 
     private const int DefaultCapacity = 4;
+
+    #endregion
+
+    #region Fields
 
     private Entry[] _entries;
     private int _count;
@@ -61,7 +65,7 @@ public sealed class QuickDictionary :
 
     #endregion
 
-    #region Construction
+    #region Constructors
 
     /// <summary>
     /// Initializes an empty dictionary using <see cref="StringComparer.Ordinal"/> key semantics.

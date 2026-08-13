@@ -7,6 +7,8 @@ namespace PenguinConverters.Syntra.Host.Console;
 /// </summary>
 public static class Program
 {
+    #region Methods
+
     /// <summary>
     /// Main entry point. Parses command-line arguments and runs the synchronization worker.
     /// </summary>
@@ -77,4 +79,6 @@ public static class Program
             return 1;
         }
     }
+
+    #endregion
 }

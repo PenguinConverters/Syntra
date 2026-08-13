@@ -9,7 +9,13 @@ namespace PenguinConverters.Syntra.Core.Extensions;
 /// </summary>
 public static class JsonSerializerExtensions
 {
+    #region Fields
+
     private static readonly JsonSerializerOptions DefaultOptions = CreateDefaultOptions();
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Gets the default <see cref="JsonSerializerOptions"/> used throughout the Syntra framework.
@@ -67,4 +73,6 @@ public static class JsonSerializerExtensions
             }
         };
     }
+
+    #endregion
 }

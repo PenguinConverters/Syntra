@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Consumer.SchemaDesigner.Tests.Entities;
 [TestFixture]
 public class PropertyTests
 {
+    #region Methods
+
     [Test]
     public void InferType_Integer_ReturnsInt()
     {
@@ -232,4 +234,6 @@ public class PropertyTests
         //Assert
         Assert.That(property.HasUnicode, Is.True);
     }
+
+    #endregion
 }

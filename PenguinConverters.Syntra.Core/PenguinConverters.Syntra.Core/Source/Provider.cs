@@ -10,6 +10,8 @@ namespace PenguinConverters.Syntra.Core.Source;
 /// </summary>
 public abstract class Provider : IProvider
 {
+    #region Properties
+
     /// <summary>
     /// Gets the logger instance for diagnostic output.
     /// </summary>
@@ -37,6 +39,10 @@ public abstract class Provider : IProvider
 
     /// <inheritdoc />
     public virtual byte[]? Metadata => RawMetadata;
+
+    #endregion
+
+    #region Methods
 
     /// <inheritdoc />
     public abstract IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default);
@@ -111,4 +117,6 @@ public abstract class Provider : IProvider
 
         return (T)Deserializer(RawMetadata, typeof(T));
     }
+
+    #endregion
 }

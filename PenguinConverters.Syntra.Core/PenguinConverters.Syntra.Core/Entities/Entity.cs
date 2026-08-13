@@ -8,7 +8,13 @@ namespace PenguinConverters.Syntra.Core.Entities;
 /// </summary>
 public class Entity : IEntity
 {
+    #region Fields
+
     private readonly QuickDictionary _properties = new QuickDictionary(StringComparer.OrdinalIgnoreCase);
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Entity"/> class.
@@ -26,6 +32,10 @@ public class Entity : IEntity
         Identifier = identifier;
     }
 
+    #endregion
+
+    #region Properties
+
     /// <inheritdoc />
     public string? Identifier { get; }
 
@@ -35,6 +45,10 @@ public class Entity : IEntity
     /// <inheritdoc />
     public IDictionary<string, object?> Properties => _properties;
 
+    #endregion
+
+    #region Indexers
+
     /// <inheritdoc />
     public object? this[string propertyName]
     {
@@ -42,8 +56,14 @@ public class Entity : IEntity
         set => _properties[propertyName] = value;
     }
 
+    #endregion
+
+    #region Methods
+
     /// <summary>
     /// Returns a string representation of this entity.
     /// </summary>
     public override string ToString() => $"{Identifier} [{State}]";
+
+    #endregion
 }

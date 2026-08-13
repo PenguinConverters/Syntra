@@ -14,9 +14,15 @@ namespace PenguinConverters.Syntra.Host.Console;
 /// </summary>
 public class Worker
 {
+    #region Fields
+
     private readonly string _configurationPath;
     private readonly bool _schemaMode;
     private readonly ILogger _logger;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Worker"/> class.
@@ -30,6 +36,10 @@ public class Worker
         _schemaMode = schemaMode;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Asynchronously executes the synchronization workflow: loads configuration,
@@ -163,6 +173,8 @@ public class Worker
 
         return consumerBuilder.Build();
     }
+
+    #endregion
 }
 
 /// <summary>
@@ -170,6 +182,8 @@ public class Worker
 /// </summary>
 internal class SyncConfiguration
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the source provider configuration.
     /// </summary>
@@ -179,4 +193,6 @@ internal class SyncConfiguration
     /// Gets or sets the target consumer configuration.
     /// </summary>
     public TargetConfiguration? Target { get; set; }
+
+    #endregion
 }

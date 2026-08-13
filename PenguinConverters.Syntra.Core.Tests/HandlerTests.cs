@@ -12,6 +12,8 @@ namespace PenguinConverters.Syntra.Core.Tests;
 [TestFixture]
 public class HandlerTests
 {
+    #region Methods
+
     [Test]
     public void HandlerBuilder_BuildsHandler()
     {
@@ -109,4 +111,6 @@ public class HandlerTests
         //Assert
         Assert.That(handler.SourceMetadata, Is.Null);
     }
+
+    #endregion
 }

@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Consumer.ActiveDirectory.Target;
 /// </summary>
 public class Configuration
 {
+    #region Constants
+
     /// <summary>
     /// Default LDAP port for SSL connections.
     /// </summary>
@@ -17,6 +19,10 @@ public class Configuration
     /// Default LDAP search filter.
     /// </summary>
     public const string DefaultLdapFilter = "objectClass=*";
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Gets or sets the base distinguished name for the target OU.
@@ -94,6 +100,8 @@ public class Configuration
     /// Gets or sets the LDAP attributes to load when searching for existing objects.
     /// </summary>
     public List<string>? PropertiesToLoad { get; set; }
+
+    #endregion
 }
 
 /// <summary>
@@ -101,6 +109,8 @@ public class Configuration
 /// </summary>
 public class PropertyDefinition
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the AD attribute name.
     /// </summary>
@@ -121,6 +131,8 @@ public class PropertyDefinition
     /// Gets or sets a value indicating whether this is a multi-valued attribute.
     /// </summary>
     public bool Array { get; set; }
+
+    #endregion
 }
 
 /// <summary>
@@ -128,6 +140,8 @@ public class PropertyDefinition
 /// </summary>
 public class ThresholdDefinition
 {
+    #region Properties
+
     /// <summary>
     /// Gets or sets the operation type this threshold applies to (e.g., "Delete").
     /// </summary>
@@ -137,4 +151,6 @@ public class ThresholdDefinition
     /// Gets or sets the threshold percentage (0-100).
     /// </summary>
     public int Percentage { get; set; }
+
+    #endregion
 }

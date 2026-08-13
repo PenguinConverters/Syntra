@@ -13,6 +13,8 @@ namespace PenguinConverters.Syntra.Core;
 /// </summary>
 public class Handler
 {
+    #region Fields
+
     private readonly Configuration _configuration;
     private readonly byte[]? _sourceMetadata;
     private readonly byte[]? _targetMetadata;
@@ -20,6 +22,10 @@ public class Handler
     private readonly Func<string, char[]>? _discloser;
     private readonly ILogger _logger;
     private readonly byte[]? _publicKey;
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
     /// Initializes a new instance of the <see cref="Handler"/> class.
@@ -43,6 +49,10 @@ public class Handler
         _publicKey = publicKey;
     }
 
+    #endregion
+
+    #region Properties
+
     /// <summary>
     /// Gets the source provider metadata after synchronization completes.
     /// Used to persist delta tokens for subsequent runs.
@@ -53,6 +63,10 @@ public class Handler
     /// Gets a value indicating whether the consumer reported errors during synchronization.
     /// </summary>
     public bool HadErrors { get; private set; }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Asynchronously executes the full synchronization pipeline:
@@ -174,4 +188,6 @@ public class Handler
             return null;
         }
     }
+
+    #endregion
 }

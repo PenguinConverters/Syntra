@@ -8,6 +8,8 @@ namespace PenguinConverters.Syntra.Core.Source;
 /// </summary>
 public interface IProviderBuilder
 {
+    #region Methods
+
     /// <summary>
     /// Adds the serialized configuration for the provider.
     /// </summary>
@@ -43,4 +45,6 @@ public interface IProviderBuilder
     /// </summary>
     /// <returns>A fully configured provider ready for use.</returns>
     IProvider Build();
+
+    #endregion
 }
