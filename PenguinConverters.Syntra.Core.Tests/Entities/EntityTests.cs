@@ -6,6 +6,7 @@
 // -----------------------------------------------------------------------
 
 using PenguinConverters.Syntra.Core.Entities;
+using PenguinConverters.Syntra.Core.Types;
 
 namespace PenguinConverters.Syntra.Core.Tests.Entities;
 
@@ -97,6 +98,105 @@ public class EntityTests
 
         //Assert
         Assert.That(actualValue, Is.Null);
+    }
+
+    [Test]
+    public void CreateEntity_FromDictionary_ExposesProperties()
+    {
+        //Arrange
+        Dictionary<string, object?> properties = new Dictionary<string, object?>
+        {
+            { "displayName", "John Doe" },
+            { "mail", "john.doe@example.com" }
+        };
+
+        //Act
+        Entity entity = new Entity(properties);
+
+        //Assert
+        Assert.That(entity.Identifier, Is.Null);
+        Assert.That(entity["displayName"], Is.EqualTo("John Doe"));
+        Assert.That(entity["mail"], Is.EqualTo("john.doe@example.com"));
+    }
+
+    [Test]
+    public void CreateEntity_FromDictionary_WithIdentifier_SetsBoth()
+    {
+        //Arrange
+        Dictionary<string, object?> properties = new Dictionary<string, object?>
+        {
+            { "displayName", "John Doe" }
+        };
+
+        //Act
+        Entity entity = new Entity("user-001", properties);
+
+        //Assert
+        Assert.That(entity.Identifier, Is.EqualTo("user-001"));
+        Assert.That(entity["displayName"], Is.EqualTo("John Doe"));
+    }
+
+    [Test]
+    public void CreateEntity_FromCaseSensitiveDictionary_PropertiesAreCaseInsensitive()
+    {
+        //Arrange
+        Dictionary<string, object?> properties = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            { "DisplayName", "John Doe" }
+        };
+
+        //Act
+        Entity entity = new Entity(properties);
+
+        //Assert
+        Assert.That(entity["displayname"], Is.EqualTo("John Doe"));
+        Assert.That(entity.Properties, Is.Not.SameAs(properties));
+    }
+
+    [Test]
+    public void CreateEntity_FromCaseInsensitiveQuickDictionary_TakesItOver()
+    {
+        //Arrange
+        QuickDictionary properties = new QuickDictionary(StringComparer.OrdinalIgnoreCase)
+        {
+            { "displayName", "John Doe" }
+        };
+
+        //Act
+        Entity entity = new Entity(properties);
+
+        //Assert
+        Assert.That(entity.Properties, Is.SameAs(properties));
+        Assert.That(entity["DISPLAYNAME"], Is.EqualTo("John Doe"));
+    }
+
+    [Test]
+    public void CreateEntity_FromCaseSensitiveQuickDictionary_IsCopied()
+    {
+        //Arrange
+        QuickDictionary properties = new QuickDictionary(StringComparer.Ordinal)
+        {
+            { "displayName", "John Doe" }
+        };
+
+        //Act
+        Entity entity = new Entity(properties);
+
+        //Assert
+        Assert.That(entity.Properties, Is.Not.SameAs(properties));
+        Assert.That(entity["DISPLAYNAME"], Is.EqualTo("John Doe"));
+    }
+
+    [Test]
+    public void CreateEntity_FromNullDictionary_Throws()
+    {
+        //Arrange
+        IDictionary<string, object?>? properties = null;
+
+        //Act
+
+        //Assert
+        Assert.That(() => new Entity(properties!), Throws.ArgumentNullException);
     }
 
     [Test]
