@@ -27,7 +27,13 @@ public class SchemaProviderTests
         Assert.That(decodedValue, Is.EqualTo(expectedGuid.ToString()));
     }
 
+    // Both SID codecs go through System.Security.Principal.SecurityIdentifier, which is
+    // Windows-only: off Windows the encoder throws PlatformNotSupportedException and the
+    // decoder swallows it and returns Base64 instead of a SID. The constraint is on the
+    // production code, not on the test, so this documents that limitation rather than
+    // hiding a failure.
     [Test]
+    [Platform("Win", Reason = "SecurityIdentifier is Windows-only; SchemaProvider's SID codecs follow it.")]
     public void EncoderObjectSID_ConvertsCorrectly()
     {
         //Arrange
