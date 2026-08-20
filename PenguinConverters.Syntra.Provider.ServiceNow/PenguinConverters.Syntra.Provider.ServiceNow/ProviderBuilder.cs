@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Source;
 
 namespace PenguinConverters.Syntra.Provider.ServiceNow;
@@ -13,7 +14,7 @@ public class ProviderBuilder : IProviderBuilder
 
     private readonly Provider _provider = new();
     private Func<byte[], Type, object>? _deserializer;
-    private Func<string, char[]>? _discloser;
+    private Decryptor? _decryptor;
     private ILogger? _logger;
     private byte[]? _configuration;
     private byte[]? _metadata;
@@ -35,13 +36,13 @@ public class ProviderBuilder : IProviderBuilder
     public void AddLogger(ILogger logger) => _logger = logger;
 
     /// <inheritdoc />
-    public void AddDiscloser(Func<string, char[]> discloser) => _discloser = discloser;
+    public void AddDecryptor(Decryptor decryptor) => _decryptor = decryptor;
 
     /// <inheritdoc />
     public IProvider Build()
     {
         if (_deserializer is not null) _provider.SetDeserializer(_deserializer);
-        if (_discloser is not null) _provider.SetDiscloser(_discloser);
+        if (_decryptor is not null) _provider.SetDecryptor(_decryptor);
         if (_logger is not null) _provider.SetLogger(_logger);
 
         if (_configuration is not null)

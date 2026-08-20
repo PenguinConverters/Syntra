@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.ActiveDirectory.Source;
@@ -62,15 +63,15 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the LDAP username credential.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? Username { get; set; }
+    public Secret? Username { get; set; }
 
     /// <summary>
     /// Gets or sets the LDAP password credential.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? Password { get; set; }
+    public Secret? Password { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether delta synchronization is enabled.

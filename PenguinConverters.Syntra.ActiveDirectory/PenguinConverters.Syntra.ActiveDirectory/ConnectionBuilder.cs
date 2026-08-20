@@ -1,5 +1,7 @@
 using System.DirectoryServices.Protocols;
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.ActiveDirectory;
@@ -98,13 +100,25 @@ public class ConnectionBuilder
     /// <summary>
     /// Sets the credentials for LDAP authentication.
     /// </summary>
-    /// <param name="username">The username as a <see cref="ProtectedString"/>.</param>
-    /// <param name="password">The password as a <see cref="ProtectedString"/>.</param>
+    /// <param name="username">The username as a <see cref="Secret"/>.</param>
+    /// <param name="password">The password as a <see cref="Secret"/>.</param>
     /// <returns>This builder for chaining.</returns>
-    public ConnectionBuilder AddCredentials(ProtectedString username, ProtectedString password)
+    public ConnectionBuilder AddCredentials(Secret username, Secret password)
     {
         _connection.Username = username;
         _connection.Password = password;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the Keyra decryptor used to disclose protected credentials. Required whenever the
+    /// credentials passed to <see cref="AddCredentials"/> carry protected values.
+    /// </summary>
+    /// <param name="decryptor">The decryptor holding the vault key.</param>
+    /// <returns>This builder for chaining.</returns>
+    public ConnectionBuilder AddDecryptor(Decryptor decryptor)
+    {
+        _connection.Decryptor = decryptor;
         return this;
     }
 

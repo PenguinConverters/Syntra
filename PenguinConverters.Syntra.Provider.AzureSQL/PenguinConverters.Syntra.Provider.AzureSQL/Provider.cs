@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Entities;
 using PenguinConverters.Syntra.Provider.AzureSQL.Source;
 
@@ -74,7 +75,7 @@ public class Provider : Core.Source.Provider
             _lastOffset.HasValue ? "delta" : "full",
             _configuration.TableName);
 
-        // Resolve the connection string via ProtectedString.TryGetValue
+        // Resolve the connection string via Secret.TryGetValue
         // Build SQL query:
         //   Full sync:  SELECT {properties} FROM {TableName} [WHERE {WhereClause}]
         //   Delta sync: SELECT {properties} FROM {TableName} WHERE {OffsetColumn} > @lastOffset

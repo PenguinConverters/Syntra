@@ -2,6 +2,7 @@ using System.Text;
 using NCrontab;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Settings;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Core.Target;
@@ -240,11 +241,15 @@ public class Worker : IHostedService, IDisposable
             return;
         }
 
+        // The key opens every protected value in this job's configuration, so it is held for the run
+        // and disposed with it rather than kept alive between scheduled executions.
+        using Decryptor? decryptor = config.Keyra?.CreateDecryptor();
+
         // Build provider
-        IProvider provider = BuildProvider(config.Source, yamlDeserializerFunc);
+        IProvider provider = BuildProvider(config.Source, yamlDeserializerFunc, decryptor);
 
         // Build consumer
-        IConsumer consumer = BuildConsumer(config.Target, yamlDeserializerFunc);
+        IConsumer consumer = BuildConsumer(config.Target, yamlDeserializerFunc, decryptor);
 
         // Run synchronization
         await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
@@ -259,7 +264,8 @@ public class Worker : IHostedService, IDisposable
     /// <summary>
     /// Builds a provider instance by dynamically loading the connector assembly.
     /// </summary>
-    private IProvider BuildProvider(SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer)
+    private IProvider BuildProvider(
+        SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
         string assemblyName = sourceConfig.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
@@ -281,13 +287,17 @@ public class Worker : IHostedService, IDisposable
         providerBuilder.AddDeserializer(deserializer);
         providerBuilder.AddLogger(_logger);
 
+        if (decryptor is not null)
+            providerBuilder.AddDecryptor(decryptor);
+
         return providerBuilder.Build();
     }
 
     /// <summary>
     /// Builds a consumer instance by dynamically loading the connector assembly.
     /// </summary>
-    private IConsumer BuildConsumer(TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer)
+    private IConsumer BuildConsumer(
+        TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
         string assemblyName = targetConfig.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
@@ -308,6 +318,9 @@ public class Worker : IHostedService, IDisposable
         consumerBuilder.AddMetadata(null);
         consumerBuilder.AddDeserializer(deserializer);
         consumerBuilder.AddLogger(_logger);
+
+        if (decryptor is not null)
+            consumerBuilder.AddDecryptor(decryptor);
 
         return consumerBuilder.Build();
     }
@@ -442,6 +455,11 @@ internal class ServiceSyncConfiguration
     /// Gets or sets the target consumer configuration.
     /// </summary>
     public TargetConfiguration? Target { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Keyra vault key location used to disclose protected configuration values.
+    /// </summary>
+    public KeyraSettings? Keyra { get; set; }
 
     #endregion
 }

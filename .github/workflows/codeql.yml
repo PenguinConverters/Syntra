@@ -32,9 +32,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # `build-mode: none` analyses the C# source directly. This is required
-          # here: every project depends on Syntra.Core, which references the
-          # proprietary Keyra SDK from a private feed that CodeQL cannot restore.
+          # `build-mode: none` analyses the C# source directly, without restoring or
+          # compiling. Now that the Keyra SDK resolves from nuget.org an autobuild is
+          # also possible; source-only analysis is kept because it is the faster and
+          # steadier of the two across 21 independent solutions.
           - language: csharp
             build-mode: none
           - language: actions

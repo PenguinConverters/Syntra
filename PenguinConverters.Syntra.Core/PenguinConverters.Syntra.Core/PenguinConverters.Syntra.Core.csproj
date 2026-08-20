@@ -15,12 +15,12 @@
 
   <!--
     Keyra SDK - proprietary, separately licensed component (not covered by Syntra's
-    Apache-2.0 license). Consumed exclusively as a NuGet package from a private feed.
-    See NOTICE and .github/CONTRIBUTING.md for how to configure the feed.
+    Apache-2.0 license) but published publicly on nuget.org, so restore needs no
+    credentials. Supplies Secret, Decryptor and DecryptorBuilder; PenguinConverters.Keyra.Core
+    and PenguinConverters.CandyStore arrive transitively. See NOTICE and .github/CONTRIBUTING.md.
   -->
   <ItemGroup>
-    <PackageReference Include="PenguinConverters.Keyra" Version="2.14.*" />
-    <PackageReference Include="PenguinConverters.Keyra.Core" Version="2.14.*" />
+    <PackageReference Include="PenguinConverters.Keyra" Version="2.19.*" />
   </ItemGroup>
 
 </Project>

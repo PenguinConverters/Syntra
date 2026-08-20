@@ -84,29 +84,31 @@ dotnet run --project PenguinConverters.Syntra.Host.Console/PenguinConverters.Syn
 
 - .NET 8.0 SDK
 - SQL Server 2016+ (for the SQL schema projects and `Consumer.AzureSQL`)
-- **Keyra SDK licence and private feed access** - see below
 
 ## Third-Party Components
 
 ### Keyra SDK
 
-`PenguinConverters.Syntra.Core` depends on the **Keyra SDK**
-(`PenguinConverters.Keyra`, `PenguinConverters.Keyra.Core`) for credential protection,
-and every other component depends on Core.
+`PenguinConverters.Syntra.Core` depends on the **Keyra SDK** (`PenguinConverters.Keyra`) for
+credential protection, and every other component depends on Core. Keyra supplies the `Secret`
+configuration node, the `Decryptor` that opens it, and `DecryptorBuilder`.
 
 > **The Keyra SDK is proprietary and separately licensed.** It is **not** covered by the
-> Apache-2.0 license that governs Syntra, is not published to nuget.org, and its source is
-> not public. Building Syntra requires a Keyra licence and access to the private NuGet
-> feed that serves these packages.
+> Apache-2.0 license that governs Syntra, and its source is not public.
+
+Keyra is published on nuget.org, so cloning and building this repository needs no feed
+configuration and no credentials:
 
 ```bash
-dotnet nuget add source <FEED_URL> --name keyra \
-    --username <USER> --password <TOKEN> --store-password-in-clear-text
+git clone https://github.com/PenguinConverters/Syntra.git
+dotnet build PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.slnx
 ```
 
-Nothing in Syntra's Apache-2.0 grant conveys any right to use, copy, modify, or
-redistribute the Keyra SDK. See [NOTICE](NOTICE) for the full statement, and
-[CONTRIBUTING.md](.github/CONTRIBUTING.md#the-keyra-sdk-dependency) for setup.
+Being able to restore the packages is not a licence to use them. Nothing in Syntra's
+Apache-2.0 grant conveys any right to use, copy, modify, or redistribute the Keyra SDK.
+See [NOTICE](NOTICE) for the full statement, and
+[CONTRIBUTING.md](.github/CONTRIBUTING.md#the-keyra-sdk-dependency) for how credentials are
+protected.
 
 The SQL schema project (`Consumer.MicrosoftSQL.SharedSchema`) has no Keyra dependency and
 builds with the .NET SDK alone.

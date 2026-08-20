@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.CMDB.Source;
@@ -27,15 +28,15 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the username credential for CMDB authentication.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? Username { get; set; }
+    public Secret? Username { get; set; }
 
     /// <summary>
     /// Gets or sets the password credential for CMDB authentication.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? Password { get; set; }
+    public Secret? Password { get; set; }
 
     #endregion
 }

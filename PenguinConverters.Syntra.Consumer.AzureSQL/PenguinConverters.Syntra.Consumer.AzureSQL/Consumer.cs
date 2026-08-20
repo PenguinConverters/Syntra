@@ -246,7 +246,7 @@ public class Consumer : Core.Target.Consumer
         if (_configuration?.ConnectionString is null)
             throw new InvalidOperationException("Azure SQL consumer requires a connection string.");
 
-        if (!_configuration.ConnectionString.TryGetValue(Discloser, out char[] connectionChars))
+        if (!TryDisclose(_configuration.ConnectionString, out char[] connectionChars))
             throw new InvalidOperationException("Failed to resolve the Azure SQL connection string.");
 
         _connection = new SqlConnection(new string(connectionChars));

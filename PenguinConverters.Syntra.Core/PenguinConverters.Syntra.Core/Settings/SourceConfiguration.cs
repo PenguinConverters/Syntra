@@ -1,3 +1,5 @@
+using PenguinConverters.Keyra.Settings;
+
 namespace PenguinConverters.Syntra.Core.Settings;
 
 /// <summary>
@@ -19,8 +21,9 @@ public class SourceConfiguration
 
     /// <summary>
     /// Gets or sets the connection string for the source system.
+    /// May be a Keyra-protected value; disclose it with the pipeline's decryptor.
     /// </summary>
-    public ProtectedString? ConnectionString { get; set; }
+    public Secret? ConnectionString { get; set; }
 
     /// <summary>
     /// Gets or sets the list of column/property names to retrieve.

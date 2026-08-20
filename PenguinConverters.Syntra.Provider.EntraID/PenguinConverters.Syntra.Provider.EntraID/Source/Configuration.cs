@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.EntraID.Source;
@@ -22,9 +23,9 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the client secret credential for the Graph API service principal.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? ClientSecret { get; set; }
+    public Secret? ClientSecret { get; set; }
 
     /// <summary>
     /// Gets or sets the Microsoft Graph API endpoint path (e.g., "/users", "/groups").

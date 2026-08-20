@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Core;
@@ -15,7 +16,7 @@ public class HandlerBuilder
     private byte[]? _sourceMetadata;
     private byte[]? _targetMetadata;
     private Func<byte[], Type, object>? _deserializer;
-    private Func<string, char[]>? _discloser;
+    private Decryptor? _decryptor;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _publicKey;
 
@@ -68,13 +69,18 @@ public class HandlerBuilder
     }
 
     /// <summary>
-    /// Sets the discloser function for credential decryption via Keyra.
+    /// Sets the Keyra decryptor used to disclose protected configuration values.
     /// </summary>
-    /// <param name="discloser">The discloser function.</param>
+    /// <remarks>
+    /// Supply a decryptor to share one vault key across several handlers; the caller keeps ownership
+    /// and disposes it. When none is supplied, the handler builds one for the run from
+    /// <see cref="Configuration.Keyra"/> and disposes it when the run ends.
+    /// </remarks>
+    /// <param name="decryptor">The decryptor holding the vault key.</param>
     /// <returns>This builder instance for fluent chaining.</returns>
-    public HandlerBuilder WithDiscloser(Func<string, char[]> discloser)
+    public HandlerBuilder WithDecryptor(Decryptor decryptor)
     {
-        _discloser = discloser;
+        _decryptor = decryptor;
         return this;
     }
 
@@ -115,7 +121,7 @@ public class HandlerBuilder
             _sourceMetadata,
             _targetMetadata,
             _deserializer,
-            _discloser,
+            _decryptor,
             _logger,
             _publicKey);
     }

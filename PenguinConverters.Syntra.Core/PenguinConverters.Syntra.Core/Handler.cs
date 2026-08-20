@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Extensions;
 using PenguinConverters.Syntra.Core.Settings;
 using PenguinConverters.Syntra.Core.Source;
@@ -19,7 +20,7 @@ public class Handler
     private readonly byte[]? _sourceMetadata;
     private readonly byte[]? _targetMetadata;
     private readonly Func<byte[], Type, object>? _deserializer;
-    private readonly Func<string, char[]>? _discloser;
+    private readonly Decryptor? _decryptor;
     private readonly ILogger _logger;
     private readonly byte[]? _publicKey;
 
@@ -36,7 +37,7 @@ public class Handler
         byte[]? sourceMetadata,
         byte[]? targetMetadata,
         Func<byte[], Type, object>? deserializer,
-        Func<string, char[]>? discloser,
+        Decryptor? decryptor,
         ILogger logger,
         byte[]? publicKey)
     {
@@ -44,7 +45,7 @@ public class Handler
         _sourceMetadata = sourceMetadata;
         _targetMetadata = targetMetadata;
         _deserializer = deserializer;
-        _discloser = discloser;
+        _decryptor = decryptor;
         _logger = logger ?? NullLogger.Instance;
         _publicKey = publicKey;
     }
@@ -79,41 +80,63 @@ public class Handler
         _logger.LogInformation("Starting synchronization. Source: {Source}, Target: {Target}, Delta: {Delta}",
             _configuration.Source.Type, _configuration.Target.Type, _configuration.Delta);
 
-        IProvider provider = BuildProvider();
-        IConsumer consumer = BuildConsumer();
+        // A decryptor supplied through the builder belongs to the caller; one opened from the
+        // configuration belongs to this run and is disposed with it.
+        Decryptor? ownedDecryptor = _decryptor is null && _configuration.Keyra is not null
+            ? OpenDecryptor(_configuration.Keyra)
+            : null;
 
         try
         {
-            _logger.LogInformation("Running synchronization pipeline.");
-            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during synchronization pipeline.");
-            HadErrors = true;
-            throw;
-        }
-        finally
-        {
+            Decryptor? decryptor = _decryptor ?? ownedDecryptor;
+
+            IProvider provider = BuildProvider(decryptor);
+            IConsumer consumer = BuildConsumer(decryptor);
+
             try
             {
-                _logger.LogInformation("Finalizing synchronization pipeline.");
-                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Running synchronization pipeline.");
+                await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during finalization.");
+                _logger.LogError(ex, "Error during synchronization pipeline.");
                 HadErrors = true;
+                throw;
             }
+            finally
+            {
+                try
+                {
+                    _logger.LogInformation("Finalizing synchronization pipeline.");
+                    await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error during finalization.");
+                    HadErrors = true;
+                }
 
-            SourceMetadata = provider.Metadata;
-            HadErrors = HadErrors || consumer.HadErrors;
+                SourceMetadata = provider.Metadata;
+                HadErrors = HadErrors || consumer.HadErrors;
+            }
+        }
+        finally
+        {
+            ownedDecryptor?.Dispose();
         }
 
         _logger.LogInformation("Synchronization completed. HadErrors: {HadErrors}", HadErrors);
     }
 
-    private IProvider BuildProvider()
+    private Decryptor OpenDecryptor(KeyraSettings keyra)
+    {
+        Decryptor decryptor = keyra.CreateDecryptor();
+        _logger.LogDebug("Opened Keyra key '{KeyId}' for credential disclosure.", decryptor.KeyId);
+        return decryptor;
+    }
+
+    private IProvider BuildProvider(Decryptor? decryptor)
     {
         _logger.LogDebug("Building provider from assembly '{Assembly}'.", _configuration.Source.Type);
 
@@ -129,8 +152,8 @@ public class Handler
         if (_deserializer is not null)
             builder.WithDeserializer(_deserializer);
 
-        if (_discloser is not null)
-            builder.WithDiscloser(_discloser);
+        if (decryptor is not null)
+            builder.WithDecryptor(decryptor);
 
         if (_publicKey is not null)
             builder.WithPublicKey(_publicKey);
@@ -138,7 +161,7 @@ public class Handler
         return (IProvider)builder.Build();
     }
 
-    private IConsumer BuildConsumer()
+    private IConsumer BuildConsumer(Decryptor? decryptor)
     {
         _logger.LogDebug("Building consumer from assembly '{Assembly}'.", _configuration.Target.Type);
 
@@ -154,8 +177,8 @@ public class Handler
         if (_deserializer is not null)
             builder.WithDeserializer(_deserializer);
 
-        if (_discloser is not null)
-            builder.WithDiscloser(_discloser);
+        if (decryptor is not null)
+            builder.WithDecryptor(decryptor);
 
         if (_publicKey is not null)
             builder.WithPublicKey(_publicKey);

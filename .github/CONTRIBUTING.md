@@ -19,26 +19,46 @@ By contributing you agree that your contributions are licensed under the
 
 - .NET 8.0 SDK
 - SQL Server 2016+ (only for the SQL schema projects and `Consumer.AzureSQL`)
-- A **Keyra SDK licence and private feed access** — see below
 
 ### The Keyra SDK dependency
 
 `PenguinConverters.Syntra.Core` depends on the **Keyra SDK**
-(`PenguinConverters.Keyra`, `PenguinConverters.Keyra.Core`) for credential protection.
+(`PenguinConverters.Keyra`) for credential protection. It supplies the `Secret` configuration
+node, the `Decryptor` that opens it, and `DecryptorBuilder`. `PenguinConverters.Keyra.Core` and
+`PenguinConverters.CandyStore` come with it transitively; CandyStore carries the native engine as
+per-RID runtime assets, so nothing needs installing separately.
 
-Keyra is **proprietary and separately licensed**. It is not covered by Syntra's
-Apache-2.0 license, is not published to nuget.org, and its source is not public. Building
-`Syntra.Core` — and therefore anything that references it — requires a Keyra licence and
-access to the private feed that hosts the packages:
+Keyra is **proprietary and separately licensed** — it is not covered by Syntra's Apache-2.0
+license and its source is not public — but it is published on nuget.org, so `git clone` and
+`dotnet build` work with no feed configuration and no credentials. Shipping a product that uses
+it still requires a Keyra licence; see [NOTICE](../NOTICE).
 
-```bash
-dotnet nuget add source <FEED_URL> --name keyra \
-    --username <USER> --password <TOKEN> --store-password-in-clear-text
+Key storage providers are discovered at runtime, not referenced at build time. A portable
+password-protected share (`aes-gcm`) needs nothing extra. A Windows-identity key additionally
+needs `PenguinConverters.Keyra.KeyStorageProvider.DpapiNg` deployed beside the host — it targets
+`net8.0-windows`, which is why no Syntra project references it.
+
+### Protecting a credential
+
+Configuration carries credentials as `PenguinConverters.Keyra.Settings.Secret`, never as a plain
+string. A protected value serializes as `{ "Value": "<ciphertext>", "Protected": true }`; an
+unprotected one holds its plaintext and states `Protected: false`.
+
+Produce the ciphertext once, with the key that will open it:
+
+```csharp
+using Decryptor decryptor = new DecryptorBuilder()
+    .UseKeyFile(@"D:\secure\syntra.keyra")
+    .WithPassword(password)
+    .Build();
+
+Secret connectionString = Secret.Protect(decryptor, "Server=…;Database=…");
 ```
 
-Never commit feed credentials. See [NOTICE](../NOTICE) for the full licensing statement.
-
-Solutions that do not reference `Syntra.Core` build against nuget.org alone.
+Point a configuration at the key with a `keyra:` section — `keyFile`, or `shareVariable` naming an
+environment variable that holds an armored share. The key password is never read from the
+configuration file, since that file is what the key protects; it comes from
+`SYNTRA_KEYRA_PASSWORD`, or from the variable `passwordVariable` names.
 
 ### Build and test
 

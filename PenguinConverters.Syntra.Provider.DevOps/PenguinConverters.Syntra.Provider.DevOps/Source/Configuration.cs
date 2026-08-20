@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.DevOps.Source;
@@ -22,9 +23,9 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the Personal Access Token (PAT) for authentication.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? PAT { get; set; }
+    public Secret? PAT { get; set; }
 
     #endregion
 }

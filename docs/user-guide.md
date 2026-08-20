@@ -120,7 +120,29 @@ CMDKEYRA encrypt --keyfile vault.keyra --value "MyPassword123"
 # Output: BASE64_ENCRYPTED_VALUE
 ```
 
-Set `Protected: true` and use the encrypted value in configuration.
+Put the output in the configuration with `Protected: true`, and add a `Keyra` section naming
+the key that opens it:
+
+```yaml
+Keyra:
+  KeyFile: "D:/secure/vault.keyra"
+  # With no key file on disk, name the variable holding an armored share instead:
+  # ShareVariable: "SYNTRA_KEYRA_SHARE"
+
+Source:
+  Password:
+    Value: "BASE64_ENCRYPTED_VALUE"
+    Protected: true
+```
+
+The key password is deliberately not stored in the configuration file, since that file is
+what the key protects. Supply it in `SYNTRA_KEYRA_PASSWORD`, or name a different variable
+with `PasswordVariable`. A Windows-identity key needs no password at all, but does need
+`PenguinConverters.Keyra.KeyStorageProvider.DpapiNg` deployed beside the host.
+
+A value left as `Protected: false` is read as plaintext, so no key is needed. If a value is
+marked protected and no key is available, the run fails with a message naming the problem
+rather than attempting to authenticate with the undecrypted ciphertext.
 
 ## REST API
 

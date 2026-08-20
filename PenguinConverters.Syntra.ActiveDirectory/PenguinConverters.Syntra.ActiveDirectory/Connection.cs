@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PenguinConverters.Keyra;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 using PenguinConverters.Syntra.Core.Types;
 
@@ -87,14 +89,20 @@ public class Connection : IDisposable
     public ReferralChasingOptions ReferralChasingOptions { get; set; } = ReferralChasingOptions.None;
 
     /// <summary>
-    /// Gets or sets the username credential as a <see cref="ProtectedString"/>.
+    /// Gets or sets the username credential as a <see cref="Secret"/>.
     /// </summary>
-    public ProtectedString? Username { get; set; }
+    public Secret? Username { get; set; }
 
     /// <summary>
-    /// Gets or sets the password credential as a <see cref="ProtectedString"/>.
+    /// Gets or sets the password credential as a <see cref="Secret"/>.
     /// </summary>
-    public ProtectedString? Password { get; set; }
+    public Secret? Password { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Keyra decryptor used to disclose protected credentials.
+    /// Owned by the synchronization pipeline; never disposed here.
+    /// </summary>
+    public Decryptor? Decryptor { get; set; }
 
     /// <summary>
     /// Gets the dictionary of attribute encoders keyed by attribute name.
@@ -433,14 +441,22 @@ public class Connection : IDisposable
 
         if (Username is not null && Password is not null)
         {
-            Username.TryGetValue(null, out char[]? usernameChars);
-            Password.TryGetValue(null, out char[]? passwordChars);
+            char[] usernameChars = Disclose(Username, "username");
+            char[] passwordChars = Disclose(Password, "password");
 
-            NetworkCredential credential = new NetworkCredential(
-                new string(usernameChars),
-                new string(passwordChars));
+            try
+            {
+                NetworkCredential credential = new NetworkCredential(
+                    new string(usernameChars),
+                    new string(passwordChars));
 
-            _ldapConnection.Bind(credential);
+                _ldapConnection.Bind(credential);
+            }
+            finally
+            {
+                Array.Clear(usernameChars, 0, usernameChars.Length);
+                Array.Clear(passwordChars, 0, passwordChars.Length);
+            }
         }
         else
         {
@@ -450,6 +466,31 @@ public class Connection : IDisposable
         _logger.LogInformation("LDAP connection established to {Server}:{Port}", server, Port);
 
         return _ldapConnection;
+    }
+
+    /// <summary>
+    /// Discloses a credential held as plaintext or as Keyra ciphertext.
+    /// </summary>
+    /// <param name="secret">The configured credential.</param>
+    /// <param name="name">The credential's name, used in the failure message.</param>
+    /// <returns>The disclosed characters. The caller clears them once the bind has been attempted.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the credential is protected and no usable key is available. Binding with the
+    /// undisclosed ciphertext would fail against the directory anyway, and reports the cause as a
+    /// rejected password rather than as the missing key it is.
+    /// </exception>
+    private char[] Disclose(Secret secret, string name)
+    {
+        Func<string, char[]>? decrypt = Decryptor is null ? null : Decryptor.Decrypt;
+
+        if (!secret.TryGetValue(decrypt!, out char[] plaintext) || plaintext is null)
+        {
+            throw new InvalidOperationException(
+                $"The LDAP {name} could not be disclosed. Check that the Keyra key is configured, and " +
+                "that it is the key the credential was protected with.");
+        }
+
+        return plaintext;
     }
 
     /// <summary>
@@ -468,7 +509,8 @@ public class Connection : IDisposable
             SearchScope = SearchScope,
             ReferralChasingOptions = ReferralChasingOptions,
             Username = Username,
-            Password = Password
+            Password = Password,
+            Decryptor = Decryptor
         };
 
         clone.DomainControllers.AddRange(DomainControllers);

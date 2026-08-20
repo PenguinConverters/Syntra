@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.Ciphersuite.Source;
@@ -21,9 +22,9 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the API key credential.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? ApiKey { get; set; }
+    public Secret? ApiKey { get; set; }
 
     #endregion
 }
