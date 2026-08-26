@@ -103,8 +103,13 @@ public class Worker : IHostedService, IDisposable
                 _logger.LogInformation("Loading configuration: {File}", configFile);
 
                 string content = File.ReadAllText(configFile);
+                // The naming convention establishes camelCase as the form the documentation uses,
+                // and case-insensitive matching lets a configuration written in any other casing
+                // bind to the same properties - PascalCase being what a JSON job file carries,
+                // and this directory is loaded for .json as readily as for .yaml.
                 IDeserializer deserializer = new DeserializerBuilder()
                     .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                    .WithCaseInsensitivePropertyMatching()
                     .Build();
 
                 ServiceSyncConfiguration config = deserializer.Deserialize<ServiceSyncConfiguration>(content);
@@ -117,17 +122,23 @@ public class Worker : IHostedService, IDisposable
 
                 CrontabSchedule schedule = CrontabSchedule.Parse(config.Schedule);
 
+                // The configured name identifies the job across every host that runs it, so it is
+                // what the lease is taken on. Only when a configuration names nothing does the
+                // file it was loaded from stand in.
+                string name = string.IsNullOrWhiteSpace(config.ObjectNamespace)
+                    ? Path.GetFileNameWithoutExtension(configFile)
+                    : config.ObjectNamespace;
+
                 _jobs.Add(new ScheduledJob
                 {
-                    Name = Path.GetFileNameWithoutExtension(configFile),
+                    Name = name,
                     ConfigurationPath = configFile,
                     Configuration = config,
                     CronSchedule = schedule,
-                    LeaseFilePath = Path.Combine(_configurationDirectory, $".{Path.GetFileNameWithoutExtension(configFile)}.lease")
+                    LeaseFilePath = Path.Combine(_configurationDirectory, $".{ToLeaseFileName(name)}.lease")
                 });
 
-                _logger.LogInformation("Loaded job '{Name}' with schedule '{Schedule}'",
-                    Path.GetFileNameWithoutExtension(configFile), config.Schedule);
+                _logger.LogInformation("Loaded job '{Name}' with schedule '{Schedule}'", name, config.Schedule);
             }
             catch (Exception ex)
             {
@@ -223,6 +234,7 @@ public class Worker : IHostedService, IDisposable
             string yaml = Encoding.UTF8.GetString(bytes);
             IDeserializer deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .WithCaseInsensitivePropertyMatching()
                 .Build();
             return deserializer.Deserialize(yaml, type)!;
         };
@@ -323,6 +335,33 @@ public class Worker : IHostedService, IDisposable
             consumerBuilder.AddDecryptor(decryptor);
 
         return consumerBuilder.Build();
+    }
+
+    /// <summary>
+    /// Reduces a job name to something that can be used as a file name.
+    /// </summary>
+    /// <remarks>
+    /// A configured name is free text - the workflow or pipeline that owns the job names it, and
+    /// those names carry punctuation a file name cannot. Every offending character is replaced by
+    /// an underscore, which keeps the mapping stable across runs so the same job always lands on
+    /// the same lease.
+    /// </remarks>
+    /// <param name="name">The job name.</param>
+    /// <returns>The file name to lease under.</returns>
+    private static string ToLeaseFileName(string name)
+    {
+        char[] characters = name.ToCharArray();
+        char[] invalid = Path.GetInvalidFileNameChars();
+
+        for (int index = 0; index < characters.Length; index++)
+        {
+            if (Array.IndexOf(invalid, characters[index]) >= 0)
+            {
+                characters[index] = '_';
+            }
+        }
+
+        return new string(characters);
     }
 
     /// <summary>
@@ -440,6 +479,12 @@ internal class ScheduledJob
 internal class ServiceSyncConfiguration
 {
     #region Properties
+
+    /// <summary>
+    /// Gets or sets the name identifying this job, and with it the lease that keeps two runs of
+    /// it from overlapping. Falls back to the configuration file name when unset.
+    /// </summary>
+    public string? ObjectNamespace { get; set; }
 
     /// <summary>
     /// Gets or sets the cron expression defining when the synchronization runs.

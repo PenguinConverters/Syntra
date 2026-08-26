@@ -8,6 +8,19 @@ public class Configuration
     #region Properties
 
     /// <summary>
+    /// Gets or sets the name identifying this synchronization job to the host.
+    /// </summary>
+    /// <remarks>
+    /// The host uses it to name the run so that two of the same job cannot overlap: it is the
+    /// identity behind the lease the host takes for the duration of a run - a locked file on
+    /// Windows and Linux, a leased blob in Azure.
+    ///
+    /// A host that loads its configuration from a file can fall back to the file name, but one
+    /// handed the configuration as bytes has no such name and needs this value.
+    /// </remarks>
+    public string? ObjectNamespace { get; set; }
+
+    /// <summary>
     /// Gets or sets the source connector configuration.
     /// </summary>
     public SourceConfiguration Source { get; set; } = new();
