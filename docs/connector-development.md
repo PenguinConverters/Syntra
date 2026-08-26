@@ -8,19 +8,25 @@ Syntra uses a plugin-based connector architecture. Each connector is an independ
 
 A Provider reads data from an external system and yields entities.
 
-### Step 1: Create Solution
+### Step 1: Create the Project
 
-Create a new solution folder at the repository root:
+Create a project folder at the repository root. The folder name uses the short form; the
+assembly keeps the full `PenguinConverters.Syntra.` identity (see
+[naming conventions](naming-conventions.md#folder-and-project-file-naming)):
 
 ```
-PenguinConverters.Syntra.Provider.{SystemName}/
-├── PenguinConverters.Syntra.Provider.{SystemName}/
-│   ├── PenguinConverters.Syntra.Provider.{SystemName}.csproj
-│   ├── Provider.cs
-│   ├── ProviderBuilder.cs
-│   └── Source/
-│       └── Configuration.cs
-└── PenguinConverters.Syntra.Provider.{SystemName}.sln
+Provider.{SystemName}/
+├── Provider.{SystemName}.csproj
+├── Provider.cs
+├── ProviderBuilder.cs
+└── Source/
+    └── Configuration.cs
+```
+
+Then add it to `Syntra.slnx`:
+
+```xml
+<Project Path="Provider.{SystemName}/Provider.{SystemName}.csproj" />
 ```
 
 ### Step 2: Project File
@@ -28,11 +34,13 @@ PenguinConverters.Syntra.Provider.{SystemName}/
 ```xml
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PenguinConverters.Syntra.Provider.{SystemName}</RootNamespace>
+    <AssemblyName>PenguinConverters.Syntra.Provider.{SystemName}</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core\PenguinConverters.Syntra.Core.csproj" />
+    <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>
 </Project>
 ```

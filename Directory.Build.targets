@@ -1,0 +1,66 @@
+<Project>
+
+  <!--
+    Pin the framework SDK-style database projects restore against.
+
+    Applies only to Microsoft.Build.Sql SDK-style projects - a legacy SSDT .sqlproj sets its
+    own TargetFrameworkVersion and must not be touched. The SDK otherwise picks netstandard2.1 under "dotnet build" and net472 under
+    Visual Studio's full-framework MSBuild. Both write to the same obj/, so whichever restored
+    last invalidates the other and the next build fails with NETSDK1005 ("doesn't have a target
+    for 'net472'"). Pinning one value means one assets file that both toolchains accept.
+
+    This has to be set here: the SDK assigns net472 from Sdk.props, which is imported at the top
+    of the project, so only Directory.Build.targets - imported at the very bottom - can override
+    it. The value is a restore/tooling detail; a .sqlproj emits a .dacpac and ships no assembly.
+  -->
+  <PropertyGroup Condition=" '$(UsingMicrosoftBuildSqlSdk)' == 'true' ">
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <TargetFrameworkIdentifier>.NETStandard</TargetFrameworkIdentifier>
+    <TargetFrameworkVersion>v2.1</TargetFrameworkVersion>
+    <TargetFrameworkMoniker>.NETStandard,Version=v2.1</TargetFrameworkMoniker>
+  </PropertyGroup>
+
+  <!--
+    System master dacpac for database projects.
+
+    Declared here rather than inside the .sqlproj on purpose. Visual Studio's SQL project system
+    reads package items out of the project file and tries to locate them as files in the project
+    directory, which aborts project load with:
+
+        The item 'Microsoft.SqlServer.Dacpacs.Azure.Master' does not exist in the project
+        directory; it might have been moved, renamed, or deleted.
+
+    Keeping the package out of the project file leaves only a plain ArtifactReference to a
+    dacpac path - the classic database-reference form that Visual Studio understands - while
+    PackageDownload still fetches the package for the build.
+
+    Each .sqlproj selects its system database by setting SystemDacpacPackage (and optionally
+    SystemDacpacVersion) in its own PropertyGroup.
+  -->
+
+  <PropertyGroup Condition=" '$(UsingMicrosoftBuildSqlSdk)' == 'true' And '$(SystemDacpacPackage)' != '' ">
+    <SystemDacpacVersion Condition=" '$(SystemDacpacVersion)' == '' ">170.0.3</SystemDacpacVersion>
+
+    <!--
+      NuGetPackageRoot is only defined once restore has written nuget.g.props, and Visual Studio
+      evaluates the project before that on first load. Fall back to the documented default so the
+      reference still points somewhere real.
+    -->
+    <_SystemDacpacRoot Condition=" '$(NuGetPackageRoot)' != '' ">$(NuGetPackageRoot)</_SystemDacpacRoot>
+    <_SystemDacpacRoot Condition=" '$(_SystemDacpacRoot)' == '' And '$(NUGET_PACKAGES)' != '' ">$(NUGET_PACKAGES)\</_SystemDacpacRoot>
+    <_SystemDacpacRoot Condition=" '$(_SystemDacpacRoot)' == '' And '$(UserProfile)' != '' ">$(UserProfile)\.nuget\packages\</_SystemDacpacRoot>
+    <_SystemDacpacRoot Condition=" '$(_SystemDacpacRoot)' == '' ">$(HOME)/.nuget/packages/</_SystemDacpacRoot>
+
+    <_SystemDacpacPath>$(_SystemDacpacRoot)$(SystemDacpacPackage.ToLowerInvariant())/$(SystemDacpacVersion)/tools/master.dacpac</_SystemDacpacPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition=" '$(UsingMicrosoftBuildSqlSdk)' == 'true' And '$(SystemDacpacPackage)' != '' ">
+    <PackageDownload Include="$(SystemDacpacPackage)" Version="[$(SystemDacpacVersion)]" />
+    <ArtifactReference Include="$(_SystemDacpacPath)">
+      <DatabaseVariableLiteralValue>master</DatabaseVariableLiteralValue>
+      <SuppressMissingDependenciesErrors>True</SuppressMissingDependenciesErrors>
+      <HideAbsolutePath>True</HideAbsolutePath>
+    </ArtifactReference>
+  </ItemGroup>
+
+</Project>

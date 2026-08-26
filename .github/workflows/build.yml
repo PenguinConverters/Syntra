@@ -21,36 +21,6 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # SQL schema builds with no proprietary dependencies, so it always runs and
-  # gives genuine signal on every pull request.
-  # ---------------------------------------------------------------------------
-  sql-schema:
-    name: SQL schema (dacpac)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Build SharedSchema
-        run: >-
-          dotnet build
-          PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema.sqlproj
-          -c Release
-
-      - name: Upload dacpac
-        uses: actions/upload-artifact@v7
-        with:
-          name: SharedSchema-dacpac
-          path: "**/bin/Release/**/*.dacpac"
-          if-no-files-found: warn
-          retention-days: 14
-
-  # ---------------------------------------------------------------------------
   # The Keyra SDK is proprietary but published on nuget.org, so restore needs no
   # credentials and this job gives real signal on every pull request.
   # ---------------------------------------------------------------------------
@@ -67,8 +37,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
-            8.0.x
-            9.0.x
+            10.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -77,30 +46,15 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Build all solutions
-        shell: bash
-        run: |
-          status=0
-          for sln in $(git ls-files '*.slnx' '*.sln'); do
-            echo "::group::$sln"
-            dotnet build "$sln" -c Release --nologo || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+      - name: Build solution
+        run: dotnet build Syntra.CI.slnf -c Release --nologo
 
       - name: Run tests
-        shell: bash
-        run: |
-          status=0
-          for proj in $(git ls-files '*.Tests/*.csproj'); do
-            echo "::group::$proj"
-            dotnet test "$proj" -c Release --nologo \
-              --logger "trx;LogFileName=$(basename "$proj" .csproj).trx" \
-              --results-directory TestResults \
-              --collect:"XPlat Code Coverage" || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+        run: >-
+          dotnet test Syntra.CI.slnf -c Release --nologo --no-build
+          --logger "trx"
+          --results-directory TestResults
+          --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()

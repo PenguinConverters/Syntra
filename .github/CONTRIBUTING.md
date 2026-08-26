@@ -17,7 +17,7 @@ By contributing you agree that your contributions are licensed under the
 
 ### Prerequisites
 
-- .NET 8.0 SDK
+- .NET 10.0 SDK
 - SQL Server 2016+ (only for the SQL schema projects and `Consumer.AzureSQL`)
 
 ### The Keyra SDK dependency
@@ -36,7 +36,7 @@ it still requires a Keyra licence; see [NOTICE](../NOTICE).
 Key storage providers are discovered at runtime, not referenced at build time. A portable
 password-protected share (`aes-gcm`) needs nothing extra. A Windows-identity key additionally
 needs `PenguinConverters.Keyra.KeyStorageProvider.DpapiNg` deployed beside the host — it targets
-`net8.0-windows`, which is why no Syntra project references it.
+`net10.0-windows`, which is why no Syntra project references it.
 
 ### Protecting a credential
 
@@ -62,18 +62,25 @@ configuration file, since that file is what the key protects; it comes from
 
 ### Build and test
 
-Each component is an independent solution:
+Every project lives in one solution, `Syntra.slnx`:
 
 ```bash
-dotnet build PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.sln
-dotnet test  PenguinConverters.Syntra.Core.Tests/
+dotnet build Syntra.slnx -c Release
+dotnet test  Syntra.slnx -c Release
 ```
 
-Build everything:
+A single project, when that is all you need:
 
 ```bash
-for sln in $(git ls-files '*.sln'); do dotnet build "$sln" -c Release; done
+dotnet build Core/Core.csproj
+dotnet test  Core.Tests/Core.Tests.csproj
 ```
+
+The database projects build with either toolchain, in any order, with no manual restore.
+`Directory.Build.targets` pins them to `netstandard2.1`; left alone, `Microsoft.Build.Sql` would
+pick `netstandard2.1` under `dotnet build` and `net472` under Visual Studio's MSBuild, and since
+both write the same `obj/`, each restore would invalidate the other's assets (`NETSDK1005`). The
+value is a restore detail only — a `.sqlproj` emits a `.dacpac` and ships no assembly.
 
 ## Coding Standards
 
@@ -88,7 +95,7 @@ These are enforced in review. Please read
 - Log through `Microsoft.Extensions.Logging.ILogger` — never `Console.WriteLine`.
 - Configuration is JSON (API/Functions) or YAML (Service/Console).
 - Public APIs carry XML documentation comments.
-- Target framework is `net8.0`.
+- Target framework is `net10.0`.
 
 ### Database objects
 
@@ -96,8 +103,8 @@ These are enforced in review. Please read
 - Primary key `{Table}Id` (UNIQUEIDENTIFIER), identity `{Table}Identity` (INT IDENTITY).
 - Audit columns: `{Table}Inserted`, `{Table}InsertedBy`, `{Table}Updated`,
   `{Table}UpdatedBy`, `{Table}Deleted`, `{Table}RowVersion`.
-- Shared schema targets SQL 2016+ (DSP Sql130). Azure-only objects belong in
-  `Consumer.AzureSQL.Schema` (DSP Sql160).
+- Database objects live in `Consumer.AzureSQL.Database` (DSP Sql170). It is a Visual Studio
+  SSDT project and builds with `MSBuild.exe`, not `dotnet build` — see below.
 
 ### Tests
 
@@ -128,13 +135,13 @@ hostnames, domain names, IP addresses, distinguished names, tenant IDs, or compa
 
 ## Adding a Connector
 
-1. Create a solution folder at the repository root:
-   `PenguinConverters.Syntra.Provider.{Name}/` (or `Consumer.{Name}` for a destination).
-2. Create the project folder inside it with a matching `.csproj`, plus a `.sln` at the
-   solution folder level. No `src/` or `tests/` wrapper folders.
+1. Create a project folder at the repository root: `Provider.{Name}/` (or `Consumer.{Name}`
+   for a destination), containing a matching `.csproj`. No `src/` or `tests/` wrapper folders.
+2. Set `RootNamespace` and `AssemblyName` to the full
+   `PenguinConverters.Syntra.Provider.{Name}`, then add the project to `Syntra.slnx`.
 3. Implement `IProviderBuilder` / `IConsumerBuilder`.
 4. Implement a configuration class with Keyra-protected credential fields.
-5. Add a test project `PenguinConverters.Syntra.Provider.{Name}.Tests/` at the root.
+5. Add a test project `Provider.{Name}.Tests/` at the root, and add it to `Syntra.slnx` too.
 6. Document the connector in the README table and in
    [docs/connector-development.md](../docs/connector-development.md).
 

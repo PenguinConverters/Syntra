@@ -1,0 +1,31 @@
+<Solution>
+  <Project Path="ActiveDirectory.Tests/ActiveDirectory.Tests.csproj" />
+  <Project Path="ActiveDirectory/ActiveDirectory.csproj" />
+  <Project Path="Api/Api.csproj" />
+  <Project Path="Consumer.ActiveDirectory/Consumer.ActiveDirectory.csproj" />
+  <Project Path="Consumer.AzureSQL.Database/Consumer.AzureSQL.Database.sqlproj" Id="e5d458c6-850f-4f89-8c73-9bbd9072db48">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="Consumer.AzureSQL.Tests/Consumer.AzureSQL.Tests.csproj" />
+  <Project Path="Consumer.AzureSQL/Consumer.AzureSQL.csproj" />
+  <Project Path="Consumer.SchemaDesigner.Tests/Consumer.SchemaDesigner.Tests.csproj" />
+  <Project Path="Consumer.SchemaDesigner/Consumer.SchemaDesigner.csproj" />
+  <Project Path="Core.Tests/Core.Tests.csproj" />
+  <Project Path="Core/Core.csproj" />
+  <Project Path="Host.Console/Host.Console.csproj" />
+  <Project Path="Host.Service/Host.Service.csproj" />
+  <Project Path="Provider.ActiveDirectory/Provider.ActiveDirectory.csproj" />
+  <Project Path="Provider.AzureResources/Provider.AzureResources.csproj" />
+  <Project Path="Provider.AzureSQL/Provider.AzureSQL.csproj" />
+  <Project Path="Provider.Ciphersuite/Provider.Ciphersuite.csproj" />
+  <Project Path="Provider.CMDB/Provider.CMDB.csproj" />
+  <Project Path="Provider.DevOps/Provider.DevOps.csproj" />
+  <Project Path="Provider.EntraID/Provider.EntraID.csproj" />
+  <Project Path="Provider.Exchange/Provider.Exchange.csproj" />
+  <Project Path="Provider.Infoblox/Provider.Infoblox.csproj" />
+  <Project Path="Provider.Oracle/Provider.Oracle.csproj" />
+  <Project Path="Provider.ServiceNow/Provider.ServiceNow.csproj" />
+  <Project Path="Provider.Tenable/Provider.Tenable.csproj" />
+  <Project Path="Provider.Tufin/Provider.Tufin.csproj" />
+</Solution>
