@@ -288,6 +288,23 @@ IConsumerBuilder  → ConsumerBuilder (concrete per system)
 ### Assembly Naming
 Every assembly follows the namespace: `PenguinConverters.Syntra.{Component}.dll`
 
+### Folder and Project-File Naming
+Folder and project-file names carry the **short form** — the component name with the
+`PenguinConverters.Syntra.` prefix removed. The full identity lives in `AssemblyName` and
+`RootNamespace`, which every project sets explicitly:
+
+| On disk | `AssemblyName` / `RootNamespace` |
+|---------|----------------------------------|
+| `Core/Core.csproj` | `PenguinConverters.Syntra.Core` |
+| `Provider.EntraID/Provider.EntraID.csproj` | `PenguinConverters.Syntra.Provider.EntraID` |
+| `Core.Tests/Core.Tests.csproj` | `PenguinConverters.Syntra.Core.Tests` |
+
+Do not "fix" this by lengthening folder names. The tier prefix (`Provider.`, `Consumer.`,
+`Host.`) sorts related projects together in a flat solution, which is what replaces a folder
+tree. Database projects additionally set `SqlTargetName` so the `.dacpac` keeps the full name.
+
+`Host.Console` is the one deliberate exception: it ships as `CMDSYNTRA.exe`.
+
 ## 4. API Naming Conventions
 
 ### Route Pattern
@@ -331,31 +348,45 @@ Match the source table name: `ADUser`, `ADGroup`, `ADComputer`, `AZServicePrinci
 ## 6. Adding New Components
 
 ### New Provider
-1. Create `PenguinConverters.Syntra.Provider.{System}/` at repo root
-2. Inside: `PenguinConverters.Syntra.Provider.{System}/` project folder
+1. Create `Provider.{System}/` at repo root containing `Provider.{System}.csproj`
+2. Set `RootNamespace` and `AssemblyName` to `PenguinConverters.Syntra.Provider.{System}`
 3. Files: `Provider.cs`, `ProviderBuilder.cs`, `Source/Configuration.cs`
-4. Create `.slnx` at solution folder level
-5. Reference `PenguinConverters.Syntra.Core`
+4. Add the project to `Syntra.slnx`
+5. Reference Core with `<ProjectReference Include="..\Core\Core.csproj" />`
 
 ### New Consumer
 Same pattern with `Consumer.{System}/` and `Target/Configuration.cs`
 
 ### New Database Tables
-1. Add to `PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema` for platform-shared objects (S1 prefix)
-2. Add to `PenguinConverters.Syntra.Consumer.AzureSQL.Schema` only for Azure SQL specific objects
-3. Follow the `{Prefix}{Entity}` naming
-4. Include ALL standard columns (Id, Identity, Inserted, InsertedBy, Updated, UpdatedBy, Deleted, RowVersion)
-5. Create UPDATE trigger for timestamp maintenance
-6. SQL files are auto-included by SDK v2.1.0 (no explicit `<Build>` items needed)
+1. Add to `Consumer.AzureSQL.Database` under `Tables/`
+2. Follow the `{Prefix}{Entity}` naming
+3. Include ALL standard columns (Id, Identity, Inserted, InsertedBy, Updated, UpdatedBy, Deleted, RowVersion)
+4. Create UPDATE trigger for timestamp maintenance
+5. Add a `<Build Include="..." />` item to the `.sqlproj` - a Visual Studio SSDT project lists its
+   files explicitly. Visual Studio does this for you when you add the file through the IDE.
 
 ### Database Project Architecture
-- **SharedSchema** (`Consumer.MicrosoftSQL.SharedSchema`): DSP Sql130 (SQL Server 2016+). Contains all S1 core tables, views, functions, stored procedures. Builds to `.dacpac`.
-- **AzureSQL.Schema** (`Consumer.AzureSQL.Schema`): DSP Sql160 (Azure SQL). References SharedSchema `.dacpac` via `<ArtifactReference>`. Contains only Azure-specific extensions.
-- System database references: `Microsoft.SqlServer.Dacpacs.Master` (SharedSchema) or `Microsoft.SqlServer.Dacpacs.Azure.Master` (AzureSQL)
-- SDK: `Microsoft.Build.Sql` v2.1.0
+
+`Consumer.AzureSQL.Database` is a **Visual Studio SSDT project** (`ToolsVersion 4.0`, DSP Sql170,
+`TargetFrameworkVersion v4.7.2`). It is the single database project: tables, views and functions,
+building to a `.dacpac`.
+
+**It builds with `MSBuild.exe`, not `dotnet build`.** It imports SSDT targets that ship with
+Visual Studio, so `dotnet build` fails with `MSB4278`. Consequences:
+
+- `Syntra.slnx` is the Visual Studio solution and contains it.
+- CI and `dotnet build` use `Syntra.CI.slnf`, a solution filter covering the C# projects only.
+  Add new C# projects to both files.
+- **Do not convert it to `Microsoft.Build.Sql` SDK style.** That format needs the SDK-style SQL
+  project system (`MSBuild\Sdks\Microsoft.SqlProject.Sdk`), which is absent from a stock Visual
+  Studio install. Without it the project does not load in the IDE at all - the symptom is
+  *"The item '...' does not exist in the project directory; Document load is being skipped"*.
+- `Directory.Build.targets` rules for SQL projects are gated on `UsingMicrosoftBuildSqlSdk`, so
+  they never touch this project. An SSDT project sets its own `TargetFrameworkVersion`; imposing
+  one from `Directory.Build.*` breaks it with `MSB3644`.
 
 ### New Frontend Procedures
 1. Create `SP_S1FE_{Entity}_READ` with `@metadata` parameter
 2. Support metadata levels 0, 3, 4 (minimum), ideally all levels
 3. Use `FN_DBObjectParameters` for metadata=4
-4. Add to SharedSchema under `StoredProcedures/FE/`
+4. Add to `Consumer.AzureSQL.Database` under `Stored Procedures/`

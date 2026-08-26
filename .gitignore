@@ -144,3 +144,6 @@ sign-selfsigned.pfx
 # Local-only working notes (ARCHITECTURE.md is published; see docs/)
 /CLAUDE.md
 /MISTAKES.md
+
+# Visual Studio database project file map
+*.jfm

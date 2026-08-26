@@ -275,5 +275,4 @@ Each component is an independent Solution that can be published as a NuGet packa
 | PenguinConverters.Syntra.Host.Service | Worker Service | Background service with scheduling |
 | PenguinConverters.Syntra.Provider.* | Library | Source connectors (one per system) |
 | PenguinConverters.Syntra.Consumer.* | Library | Destination connectors |
-| PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema | SSDT | Shared SQL schema (SQL 2016+, DSP Sql130) - all S1 core tables, views, functions, stored procedures |
-| PenguinConverters.Syntra.Consumer.AzureSQL.Schema | SSDT | Azure SQL specific extensions (DSP Sql160) - inherits SharedSchema via .dacpac reference |
+| Consumer.AzureSQL.Database | SSDT | Database project (DSP Sql170) - tables, views, functions; builds to .dacpac with MSBuild.exe |

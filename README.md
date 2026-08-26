@@ -3,7 +3,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Build](https://github.com/PenguinConverters/Syntra/actions/workflows/build.yml/badge.svg)](https://github.com/PenguinConverters/Syntra/actions/workflows/build.yml)
 [![CodeQL](https://github.com/PenguinConverters/Syntra/actions/workflows/codeql.yml/badge.svg)](https://github.com/PenguinConverters/Syntra/actions/workflows/codeql.yml)
-[![.NET 8.0](https://img.shields.io/badge/.NET-8.0-512BD4.svg)](https://dotnet.microsoft.com/download)
+[![.NET 10.0](https://img.shields.io/badge/.NET-10.0-512BD4.svg)](https://dotnet.microsoft.com/download)
 
 **Syntra** is an IAM (Identity & Access Management) and Automation framework by **Penguin Converters AG**.
 
@@ -45,29 +45,43 @@ It reads from multiple sources (databases, APIs, directories) and writes to mult
 
 ## Solution Structure
 
-Each component is an independent solution publishable as a NuGet package:
+One solution, `Syntra.slnx`, holds every project. Folder and project-file names drop the
+`PenguinConverters.` prefix; assembly and package identity keep it in full, so the tier
+prefix does the grouping without a folder tree:
 
 ```
-PenguinConverters.Syntra.Core/                  # Core interfaces, entities, configuration
-PenguinConverters.Syntra.ActiveDirectory/        # LDAP operations library
-PenguinConverters.Syntra.Api/                    # REST API (OData, OpenAPI, $metadata)
-PenguinConverters.Syntra.Host.Console/           # CLI application
-PenguinConverters.Syntra.Host.Service/           # Windows Service / Linux Daemon
-PenguinConverters.Syntra.Provider.*/             # Source connectors
-PenguinConverters.Syntra.Consumer.*/             # Destination connectors
+Core/                       # Core interfaces, entities, configuration
+ActiveDirectory/            # LDAP operations library
+Api/                        # REST API (OData, OpenAPI, $metadata)
+Host.Console/               # CLI application
+Host.Service/               # Windows Service / Linux Daemon
+Provider.*/                 # Source connectors
+Consumer.*/                 # Destination connectors
+Consumer.AzureSQL.Database/ # SSDT database project (builds with MSBuild.exe)
+*.Tests/                    # Test project, next to its subject
 ```
+
+`Syntra.CI.slnf` is a solution filter over the C# projects. It exists because the database
+project is a Visual Studio SSDT project that the dotnet CLI cannot build, so command-line and
+CI builds use the filter while Visual Studio opens the full solution.
+
+Each project remains independently publishable as a NuGet package
+(`dotnet pack Core/Core.csproj` produces `PenguinConverters.Syntra.Core`).
 
 ## Quick Start
 
 ```bash
-# Build a specific solution
-dotnet build PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.sln
+# Build everything (solution filter: the C# projects; this is what CI runs)
+dotnet build Syntra.CI.slnf
+
+# Build one project
+dotnet build Core/Core.csproj
 
 # Run a one-time sync
-dotnet run --project PenguinConverters.Syntra.Host.Console/PenguinConverters.Syntra.Host.Console/ -- --configuration=config.yaml
+dotnet run --project Host.Console/ -- --configuration=config.yaml
 
 # Run schema discovery
-dotnet run --project PenguinConverters.Syntra.Host.Console/PenguinConverters.Syntra.Host.Console/ -- --configuration=config.yaml --schema
+dotnet run --project Host.Console/ -- --configuration=config.yaml --schema
 ```
 
 ## Documentation
@@ -82,7 +96,7 @@ dotnet run --project PenguinConverters.Syntra.Host.Console/PenguinConverters.Syn
 
 ## Requirements
 
-- .NET 8.0 SDK
+- .NET 10.0 SDK
 - SQL Server 2016+ (for the SQL schema projects and `Consumer.AzureSQL`)
 
 ## Third-Party Components
@@ -101,7 +115,7 @@ configuration and no credentials:
 
 ```bash
 git clone https://github.com/PenguinConverters/Syntra.git
-dotnet build PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.slnx
+dotnet build Syntra.CI.slnf
 ```
 
 Being able to restore the packages is not a licence to use them. Nothing in Syntra's
@@ -110,7 +124,7 @@ See [NOTICE](NOTICE) for the full statement, and
 [CONTRIBUTING.md](.github/CONTRIBUTING.md#the-keyra-sdk-dependency) for how credentials are
 protected.
 
-The SQL schema project (`Consumer.MicrosoftSQL.SharedSchema`) has no Keyra dependency and
+The SQL schema project (`Consumer.AzureSQL.Database`) has no Keyra dependency and
 builds with the .NET SDK alone.
 
 ### Other dependencies

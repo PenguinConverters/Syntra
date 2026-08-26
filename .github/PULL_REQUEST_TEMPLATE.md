@@ -29,7 +29,7 @@
 - [ ] Consumer (which: ______)
 - [ ] Api
 - [ ] Host (Console / Service)
-- [ ] SQL schema (SharedSchema / AzureSQL.Schema)
+- [ ] SQL schema (Consumer.AzureSQL.Database)
 - [ ] Build / CI / docs
 
 ## Checklist

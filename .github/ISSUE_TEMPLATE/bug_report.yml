@@ -54,7 +54,7 @@ body:
         - Consumer.AzureSQL
         - Consumer.ActiveDirectory
         - Consumer.SchemaDesigner
-        - SQL schema (SharedSchema / AzureSQL.Schema)
+        - SQL schema (Consumer.AzureSQL.Database)
         - Build / packaging
         - Other / not sure
     validations:

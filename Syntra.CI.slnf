@@ -1,0 +1,32 @@
+{
+  "solution": {
+    "path": "Syntra.slnx",
+    "projects": [
+      "ActiveDirectory.Tests/ActiveDirectory.Tests.csproj",
+      "ActiveDirectory/ActiveDirectory.csproj",
+      "Api/Api.csproj",
+      "Consumer.ActiveDirectory/Consumer.ActiveDirectory.csproj",
+      "Consumer.AzureSQL.Tests/Consumer.AzureSQL.Tests.csproj",
+      "Consumer.AzureSQL/Consumer.AzureSQL.csproj",
+      "Consumer.SchemaDesigner.Tests/Consumer.SchemaDesigner.Tests.csproj",
+      "Consumer.SchemaDesigner/Consumer.SchemaDesigner.csproj",
+      "Core.Tests/Core.Tests.csproj",
+      "Core/Core.csproj",
+      "Host.Console/Host.Console.csproj",
+      "Host.Service/Host.Service.csproj",
+      "Provider.ActiveDirectory/Provider.ActiveDirectory.csproj",
+      "Provider.AzureResources/Provider.AzureResources.csproj",
+      "Provider.AzureSQL/Provider.AzureSQL.csproj",
+      "Provider.Ciphersuite/Provider.Ciphersuite.csproj",
+      "Provider.CMDB/Provider.CMDB.csproj",
+      "Provider.DevOps/Provider.DevOps.csproj",
+      "Provider.EntraID/Provider.EntraID.csproj",
+      "Provider.Exchange/Provider.Exchange.csproj",
+      "Provider.Infoblox/Provider.Infoblox.csproj",
+      "Provider.Oracle/Provider.Oracle.csproj",
+      "Provider.ServiceNow/Provider.ServiceNow.csproj",
+      "Provider.Tenable/Provider.Tenable.csproj",
+      "Provider.Tufin/Provider.Tufin.csproj"
+    ]
+  }
+}

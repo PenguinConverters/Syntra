@@ -17,8 +17,8 @@ By contributing you agree that your contributions are licensed under the
 
 ### Prerequisites
 
-- .NET 8.0 SDK
-- SQL Server 2016+ (only for the SQL schema projects and `Consumer.AzureSQL`)
+- .NET 10.0 SDK
+- SQL Server 2022+ and Visual Studio with SSDT (only for `Consumer.AzureSQL.Database`)
 
 ### The Keyra SDK dependency
 
@@ -36,7 +36,7 @@ it still requires a Keyra licence; see [NOTICE](../NOTICE).
 Key storage providers are discovered at runtime, not referenced at build time. A portable
 password-protected share (`aes-gcm`) needs nothing extra. A Windows-identity key additionally
 needs `PenguinConverters.Keyra.KeyStorageProvider.DpapiNg` deployed beside the host — it targets
-`net8.0-windows`, which is why no Syntra project references it.
+`net10.0-windows`, which is why no Syntra project references it.
 
 ### Protecting a credential
 
@@ -62,18 +62,38 @@ configuration file, since that file is what the key protects; it comes from
 
 ### Build and test
 
-Each component is an independent solution:
+Every project lives in one solution, `Syntra.slnx`. Open that in Visual Studio.
+
+On the command line use `Syntra.CI.slnf`, a solution filter covering the C# projects. This is
+what CI runs, and it is the reason `dotnet build Syntra.slnx` is not the command here — the
+solution also contains the database project, which the dotnet CLI cannot build (see below):
 
 ```bash
-dotnet build PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.sln
-dotnet test  PenguinConverters.Syntra.Core.Tests/
+dotnet build Syntra.CI.slnf -c Release
+dotnet test  Syntra.CI.slnf -c Release
 ```
 
-Build everything:
+A single project, when that is all you need:
 
 ```bash
-for sln in $(git ls-files '*.sln'); do dotnet build "$sln" -c Release; done
+dotnet build Core/Core.csproj
+dotnet test  Core.Tests/Core.Tests.csproj
 ```
+
+### The database project
+
+`Consumer.AzureSQL.Database` is a Visual Studio SSDT project. It imports targets that ship with
+Visual Studio, so it builds with `MSBuild.exe` and **not** `dotnet build`, which fails with
+`MSB4278`. Build it from Visual Studio, or on the command line:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+& $msbuild "Consumer.AzureSQL.Database\Consumer.AzureSQL.Database.sqlproj" -t:Build -p:Configuration=Release
+```
+
+CI builds it on a Windows runner, which carries the SSDT component and DacFx. When you add a C#
+project, add it to both `Syntra.slnx` and `Syntra.CI.slnf`.
 
 ## Coding Standards
 
@@ -88,7 +108,7 @@ These are enforced in review. Please read
 - Log through `Microsoft.Extensions.Logging.ILogger` — never `Console.WriteLine`.
 - Configuration is JSON (API/Functions) or YAML (Service/Console).
 - Public APIs carry XML documentation comments.
-- Target framework is `net8.0`.
+- Target framework is `net10.0`.
 
 ### Database objects
 
@@ -96,8 +116,8 @@ These are enforced in review. Please read
 - Primary key `{Table}Id` (UNIQUEIDENTIFIER), identity `{Table}Identity` (INT IDENTITY).
 - Audit columns: `{Table}Inserted`, `{Table}InsertedBy`, `{Table}Updated`,
   `{Table}UpdatedBy`, `{Table}Deleted`, `{Table}RowVersion`.
-- Shared schema targets SQL 2016+ (DSP Sql130). Azure-only objects belong in
-  `Consumer.AzureSQL.Schema` (DSP Sql160).
+- Database objects live in `Consumer.AzureSQL.Database` (DSP Sql170). It is a Visual Studio
+  SSDT project and builds with `MSBuild.exe`, not `dotnet build` — see *Building* above.
 
 ### Tests
 
@@ -128,13 +148,14 @@ hostnames, domain names, IP addresses, distinguished names, tenant IDs, or compa
 
 ## Adding a Connector
 
-1. Create a solution folder at the repository root:
-   `PenguinConverters.Syntra.Provider.{Name}/` (or `Consumer.{Name}` for a destination).
-2. Create the project folder inside it with a matching `.csproj`, plus a `.sln` at the
-   solution folder level. No `src/` or `tests/` wrapper folders.
+1. Create a project folder at the repository root: `Provider.{Name}/` (or `Consumer.{Name}`
+   for a destination), containing a matching `.csproj`. No `src/` or `tests/` wrapper folders.
+2. Set `RootNamespace` and `AssemblyName` to the full
+   `PenguinConverters.Syntra.Provider.{Name}`, then add the project to `Syntra.slnx` and
+   `Syntra.CI.slnf`.
 3. Implement `IProviderBuilder` / `IConsumerBuilder`.
 4. Implement a configuration class with Keyra-protected credential fields.
-5. Add a test project `PenguinConverters.Syntra.Provider.{Name}.Tests/` at the root.
+5. Add a test project `Provider.{Name}.Tests/` at the root, and add it to both solution files.
 6. Document the connector in the README table and in
    [docs/connector-development.md](../docs/connector-development.md).
 

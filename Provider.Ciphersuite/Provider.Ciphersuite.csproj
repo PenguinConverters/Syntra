@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PenguinConverters.Syntra.Provider.Ciphersuite</RootNamespace>
+    <AssemblyName>PenguinConverters.Syntra.Provider.Ciphersuite</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>Syntra Team</Authors>
+    <Company>Penguin Converters AG</Company>
+    <Product>Syntra</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -21,33 +21,33 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # SQL schema builds with no proprietary dependencies, so it always runs and
-  # gives genuine signal on every pull request.
+  # Consumer.AzureSQL.Database is a Visual Studio SSDT project: it imports targets
+  # that ship with Visual Studio, so it builds with MSBuild.exe and not the dotnet
+  # CLI. That confines it to a Windows runner, which carries the SSDT component and
+  # DacFx. MSBuild is located through vswhere rather than a separate action.
   # ---------------------------------------------------------------------------
-  sql-schema:
-    name: SQL schema (dacpac)
-    runs-on: ubuntu-latest
+  database:
+    name: Database (dacpac)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: |
-            8.0.x
-            9.0.x
-
-      - name: Build SharedSchema
-        run: >-
-          dotnet build
-          PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema/PenguinConverters.Syntra.Consumer.MicrosoftSQL.SharedSchema.sqlproj
-          -c Release
+      - name: Build database project
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild.exe not found on this runner." }
+          Write-Host "Using $msbuild"
+          & $msbuild "Consumer.AzureSQL.Database\Consumer.AzureSQL.Database.sqlproj" -t:Build -p:Configuration=Release -nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload dacpac
         uses: actions/upload-artifact@v7
         with:
-          name: SharedSchema-dacpac
-          path: "**/bin/Release/**/*.dacpac"
-          if-no-files-found: warn
+          name: Database-dacpac
+          path: Consumer.AzureSQL.Database/bin/Release/*.dacpac
+          if-no-files-found: error
           retention-days: 14
 
   # ---------------------------------------------------------------------------
@@ -67,8 +67,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
-            8.0.x
-            9.0.x
+            10.0.x
 
       - name: Cache NuGet packages
         uses: actions/cache@v6
@@ -77,30 +76,15 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Build all solutions
-        shell: bash
-        run: |
-          status=0
-          for sln in $(git ls-files '*.slnx' '*.sln'); do
-            echo "::group::$sln"
-            dotnet build "$sln" -c Release --nologo || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+      - name: Build solution
+        run: dotnet build Syntra.CI.slnf -c Release --nologo
 
       - name: Run tests
-        shell: bash
-        run: |
-          status=0
-          for proj in $(git ls-files '*.Tests/*.csproj'); do
-            echo "::group::$proj"
-            dotnet test "$proj" -c Release --nologo \
-              --logger "trx;LogFileName=$(basename "$proj" .csproj).trx" \
-              --results-directory TestResults \
-              --collect:"XPlat Code Coverage" || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+        run: >-
+          dotnet test Syntra.CI.slnf -c Release --nologo --no-build
+          --logger "trx"
+          --results-directory TestResults
+          --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()

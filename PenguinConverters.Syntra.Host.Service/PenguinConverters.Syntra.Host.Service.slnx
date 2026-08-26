@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="../PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core/PenguinConverters.Syntra.Core.csproj" />
-  <Project Path="PenguinConverters.Syntra.Host.Service/PenguinConverters.Syntra.Host.Service.csproj" />
-</Solution>

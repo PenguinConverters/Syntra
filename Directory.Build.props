@@ -1,6 +1,17 @@
 <Project>
+  <!--
+    Database projects must not inherit this. Microsoft.Build.Sql picks its own framework
+    (netstandard2.1 under "dotnet build", net472 under Visual Studio), but only when the
+    property is empty - and Visual Studio then forces net472 regardless. Setting it here for
+    a .sqlproj pins one side of that pair and leaves restore and build disagreeing, which is
+    what produces NETSDK1005 and makes the Microsoft.SqlServer.Dacpacs.* packages, which carry
+    no matching assets, report as missing.
+  -->
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -13,7 +24,7 @@
     <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
-  <!-- NuGet package metadata: every solution in this repository is independently publishable. -->
+  <!-- NuGet package metadata: every project in this repository is independently publishable. -->
   <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/PenguinConverters/Syntra</PackageProjectUrl>
@@ -26,6 +37,15 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!--
+    Test projects are not published, so they expose no public API to document. Generating a
+    documentation file for them only produces CS1591 noise on every [Test] method. This must
+    come after the block above, which turns documentation on for everything.
+  -->
+  <PropertyGroup Condition=" $(MSBuildProjectName.EndsWith('.Tests')) ">
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false' And Exists('$(MSBuildThisFileDirectory)README.md')">
