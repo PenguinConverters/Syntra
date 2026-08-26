@@ -58,8 +58,13 @@ public class Worker
         }
 
         string yamlContent = await File.ReadAllTextAsync(_configurationPath, cancellationToken).ConfigureAwait(false);
+        // The naming convention establishes camelCase as the form the documentation uses, and
+        // case-insensitive matching lets a configuration written in any other casing bind to the
+        // same properties - PascalCase being what a JSON job file carries, YAML being a superset
+        // of JSON.
         IDeserializer deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
+            .WithCaseInsensitivePropertyMatching()
             .Build();
 
         SyncConfiguration configuration = deserializer.Deserialize<SyncConfiguration>(yamlContent);
@@ -82,6 +87,7 @@ public class Worker
             string yaml = Encoding.UTF8.GetString(bytes);
             IDeserializer yamlDeserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
+                .WithCaseInsensitivePropertyMatching()
                 .Build();
             return yamlDeserializer.Deserialize(yaml, type)!;
         };
