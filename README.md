@@ -50,15 +50,20 @@ One solution, `Syntra.slnx`, holds every project. Folder and project-file names 
 prefix does the grouping without a folder tree:
 
 ```
-Core/                     # Core interfaces, entities, configuration
-ActiveDirectory/          # LDAP operations library
-Api/                      # REST API (OData, OpenAPI, $metadata)
-Host.Console/             # CLI application
-Host.Service/             # Windows Service / Linux Daemon
-Provider.*/               # Source connectors
-Consumer.*/               # Destination connectors
-*.Tests/                  # Test project, next to its subject
+Core/                       # Core interfaces, entities, configuration
+ActiveDirectory/            # LDAP operations library
+Api/                        # REST API (OData, OpenAPI, $metadata)
+Host.Console/               # CLI application
+Host.Service/               # Windows Service / Linux Daemon
+Provider.*/                 # Source connectors
+Consumer.*/                 # Destination connectors
+Consumer.AzureSQL.Database/ # SSDT database project (builds with MSBuild.exe)
+*.Tests/                    # Test project, next to its subject
 ```
+
+`Syntra.CI.slnf` is a solution filter over the C# projects. It exists because the database
+project is a Visual Studio SSDT project that the dotnet CLI cannot build, so command-line and
+CI builds use the filter while Visual Studio opens the full solution.
 
 Each project remains independently publishable as a NuGet package
 (`dotnet pack Core/Core.csproj` produces `PenguinConverters.Syntra.Core`).
@@ -66,8 +71,8 @@ Each project remains independently publishable as a NuGet package
 ## Quick Start
 
 ```bash
-# Build everything
-dotnet build Syntra.slnx
+# Build everything (solution filter: the C# projects; this is what CI runs)
+dotnet build Syntra.CI.slnf
 
 # Build one project
 dotnet build Core/Core.csproj
@@ -110,7 +115,7 @@ configuration and no credentials:
 
 ```bash
 git clone https://github.com/PenguinConverters/Syntra.git
-dotnet build Syntra.slnx
+dotnet build Syntra.CI.slnf
 ```
 
 Being able to restore the packages is not a licence to use them. Nothing in Syntra's

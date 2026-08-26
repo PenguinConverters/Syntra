@@ -18,7 +18,7 @@ By contributing you agree that your contributions are licensed under the
 ### Prerequisites
 
 - .NET 10.0 SDK
-- SQL Server 2016+ (only for the SQL schema projects and `Consumer.AzureSQL`)
+- SQL Server 2022+ and Visual Studio with SSDT (only for `Consumer.AzureSQL.Database`)
 
 ### The Keyra SDK dependency
 
@@ -62,11 +62,15 @@ configuration file, since that file is what the key protects; it comes from
 
 ### Build and test
 
-Every project lives in one solution, `Syntra.slnx`:
+Every project lives in one solution, `Syntra.slnx`. Open that in Visual Studio.
+
+On the command line use `Syntra.CI.slnf`, a solution filter covering the C# projects. This is
+what CI runs, and it is the reason `dotnet build Syntra.slnx` is not the command here — the
+solution also contains the database project, which the dotnet CLI cannot build (see below):
 
 ```bash
-dotnet build Syntra.slnx -c Release
-dotnet test  Syntra.slnx -c Release
+dotnet build Syntra.CI.slnf -c Release
+dotnet test  Syntra.CI.slnf -c Release
 ```
 
 A single project, when that is all you need:
@@ -76,11 +80,20 @@ dotnet build Core/Core.csproj
 dotnet test  Core.Tests/Core.Tests.csproj
 ```
 
-The database projects build with either toolchain, in any order, with no manual restore.
-`Directory.Build.targets` pins them to `netstandard2.1`; left alone, `Microsoft.Build.Sql` would
-pick `netstandard2.1` under `dotnet build` and `net472` under Visual Studio's MSBuild, and since
-both write the same `obj/`, each restore would invalidate the other's assets (`NETSDK1005`). The
-value is a restore detail only — a `.sqlproj` emits a `.dacpac` and ships no assembly.
+### The database project
+
+`Consumer.AzureSQL.Database` is a Visual Studio SSDT project. It imports targets that ship with
+Visual Studio, so it builds with `MSBuild.exe` and **not** `dotnet build`, which fails with
+`MSB4278`. Build it from Visual Studio, or on the command line:
+
+```powershell
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+& $msbuild "Consumer.AzureSQL.Database\Consumer.AzureSQL.Database.sqlproj" -t:Build -p:Configuration=Release
+```
+
+CI builds it on a Windows runner, which carries the SSDT component and DacFx. When you add a C#
+project, add it to both `Syntra.slnx` and `Syntra.CI.slnf`.
 
 ## Coding Standards
 
@@ -104,7 +117,7 @@ These are enforced in review. Please read
 - Audit columns: `{Table}Inserted`, `{Table}InsertedBy`, `{Table}Updated`,
   `{Table}UpdatedBy`, `{Table}Deleted`, `{Table}RowVersion`.
 - Database objects live in `Consumer.AzureSQL.Database` (DSP Sql170). It is a Visual Studio
-  SSDT project and builds with `MSBuild.exe`, not `dotnet build` — see below.
+  SSDT project and builds with `MSBuild.exe`, not `dotnet build` — see *Building* above.
 
 ### Tests
 
@@ -138,10 +151,11 @@ hostnames, domain names, IP addresses, distinguished names, tenant IDs, or compa
 1. Create a project folder at the repository root: `Provider.{Name}/` (or `Consumer.{Name}`
    for a destination), containing a matching `.csproj`. No `src/` or `tests/` wrapper folders.
 2. Set `RootNamespace` and `AssemblyName` to the full
-   `PenguinConverters.Syntra.Provider.{Name}`, then add the project to `Syntra.slnx`.
+   `PenguinConverters.Syntra.Provider.{Name}`, then add the project to `Syntra.slnx` and
+   `Syntra.CI.slnf`.
 3. Implement `IProviderBuilder` / `IConsumerBuilder`.
 4. Implement a configuration class with Keyra-protected credential fields.
-5. Add a test project `Provider.{Name}.Tests/` at the root, and add it to `Syntra.slnx` too.
+5. Add a test project `Provider.{Name}.Tests/` at the root, and add it to both solution files.
 6. Document the connector in the README table and in
    [docs/connector-development.md](../docs/connector-development.md).
 

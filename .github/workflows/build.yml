@@ -21,6 +21,36 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Consumer.AzureSQL.Database is a Visual Studio SSDT project: it imports targets
+  # that ship with Visual Studio, so it builds with MSBuild.exe and not the dotnet
+  # CLI. That confines it to a Windows runner, which carries the SSDT component and
+  # DacFx. MSBuild is located through vswhere rather than a separate action.
+  # ---------------------------------------------------------------------------
+  database:
+    name: Database (dacpac)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build database project
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
+          if (-not $msbuild) { throw "MSBuild.exe not found on this runner." }
+          Write-Host "Using $msbuild"
+          & $msbuild "Consumer.AzureSQL.Database\Consumer.AzureSQL.Database.sqlproj" -t:Build -p:Configuration=Release -nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload dacpac
+        uses: actions/upload-artifact@v7
+        with:
+          name: Database-dacpac
+          path: Consumer.AzureSQL.Database/bin/Release/*.dacpac
+          if-no-files-found: error
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
   # The Keyra SDK is proprietary but published on nuget.org, so restore needs no
   # credentials and this job gives real signal on every pull request.
   # ---------------------------------------------------------------------------
