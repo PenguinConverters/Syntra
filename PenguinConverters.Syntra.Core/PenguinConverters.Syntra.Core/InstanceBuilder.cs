@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Core.Target;
 
@@ -19,7 +20,7 @@ public class InstanceBuilder<T> where T : class
     private byte[]? _configuration;
     private byte[]? _metadata;
     private Func<byte[], Type, object>? _deserializer;
-    private Func<string, char[]>? _discloser;
+    private Decryptor? _decryptor;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _expectedPublicKey;
 
@@ -78,13 +79,13 @@ public class InstanceBuilder<T> where T : class
     }
 
     /// <summary>
-    /// Sets the discloser function for credential decryption via Keyra.
+    /// Sets the Keyra decryptor used to disclose protected configuration values.
     /// </summary>
-    /// <param name="discloser">The discloser function.</param>
+    /// <param name="decryptor">The decryptor holding the vault key.</param>
     /// <returns>This builder instance for fluent chaining.</returns>
-    public InstanceBuilder<T> WithDiscloser(Func<string, char[]> discloser)
+    public InstanceBuilder<T> WithDecryptor(Decryptor decryptor)
     {
-        _discloser = discloser;
+        _decryptor = decryptor;
         return this;
     }
 
@@ -187,8 +188,8 @@ public class InstanceBuilder<T> where T : class
 
             providerBuilder.AddLogger(_logger);
 
-            if (_discloser is not null)
-                providerBuilder.AddDiscloser(_discloser);
+            if (_decryptor is not null)
+                providerBuilder.AddDecryptor(_decryptor);
         }
         else if (builder is IConsumerBuilder consumerBuilder)
         {
@@ -202,8 +203,8 @@ public class InstanceBuilder<T> where T : class
 
             consumerBuilder.AddLogger(_logger);
 
-            if (_discloser is not null)
-                consumerBuilder.AddDiscloser(_discloser);
+            if (_decryptor is not null)
+                consumerBuilder.AddDecryptor(_decryptor);
         }
     }
 

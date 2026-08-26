@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using PenguinConverters.Keyra.Settings;
 
 namespace PenguinConverters.Syntra.Core.Settings;
 
@@ -31,8 +32,9 @@ public class CertificateSettings
 
     /// <summary>
     /// Gets or sets the password for the certificate file, if applicable.
+    /// May be a Keyra-protected value; disclose it with the pipeline's decryptor.
     /// </summary>
-    public ProtectedString? Password { get; set; }
+    public Secret? Password { get; set; }
 
     #endregion
 }

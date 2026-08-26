@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
+using PenguinConverters.Keyra;
 using PenguinConverters.Syntra.Core.Settings;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Core.Target;
@@ -85,8 +86,17 @@ public class Worker
             return yamlDeserializer.Deserialize(yaml, type)!;
         };
 
+        // The key opens every protected value in this configuration, so it is held for the whole run
+        // and disposed with it.
+        using Decryptor? decryptor = configuration.Keyra?.CreateDecryptor();
+
+        if (decryptor is not null)
+        {
+            _logger.LogInformation("Opened Keyra key {KeyId} for credential disclosure", decryptor.KeyId);
+        }
+
         // Build provider
-        IProvider provider = BuildProvider(configuration.Source, yamlDeserializerFunc);
+        IProvider provider = BuildProvider(configuration.Source, yamlDeserializerFunc, decryptor);
 
         // Build consumer
         IConsumer consumer;
@@ -95,12 +105,13 @@ public class Worker
             _logger.LogInformation("Running in SchemaDesigner mode");
             consumer = BuildConsumer(
                 new TargetConfiguration { Type = "PenguinConverters.Syntra.Consumer.SchemaDesigner" },
-                yamlDeserializerFunc);
+                yamlDeserializerFunc,
+                decryptor);
         }
         else
         {
             _logger.LogInformation("Target type: {TargetType}", configuration.Target!.Type);
-            consumer = BuildConsumer(configuration.Target, yamlDeserializerFunc);
+            consumer = BuildConsumer(configuration.Target, yamlDeserializerFunc, decryptor);
         }
 
         // Run synchronization
@@ -121,7 +132,8 @@ public class Worker
     /// <summary>
     /// Builds a provider instance by dynamically loading the connector assembly.
     /// </summary>
-    private IProvider BuildProvider(SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer)
+    private IProvider BuildProvider(
+        SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
         string assemblyName = sourceConfig.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
@@ -143,13 +155,17 @@ public class Worker
         providerBuilder.AddDeserializer(deserializer);
         providerBuilder.AddLogger(_logger);
 
+        if (decryptor is not null)
+            providerBuilder.AddDecryptor(decryptor);
+
         return providerBuilder.Build();
     }
 
     /// <summary>
     /// Builds a consumer instance by dynamically loading the connector assembly.
     /// </summary>
-    private IConsumer BuildConsumer(TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer)
+    private IConsumer BuildConsumer(
+        TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
         string assemblyName = targetConfig.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
@@ -170,6 +186,9 @@ public class Worker
         consumerBuilder.AddMetadata(null);
         consumerBuilder.AddDeserializer(deserializer);
         consumerBuilder.AddLogger(_logger);
+
+        if (decryptor is not null)
+            consumerBuilder.AddDecryptor(decryptor);
 
         return consumerBuilder.Build();
     }
@@ -193,6 +212,11 @@ internal class SyncConfiguration
     /// Gets or sets the target consumer configuration.
     /// </summary>
     public TargetConfiguration? Target { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Keyra vault key location used to disclose protected configuration values.
+    /// </summary>
+    public KeyraSettings? Keyra { get; set; }
 
     #endregion
 }

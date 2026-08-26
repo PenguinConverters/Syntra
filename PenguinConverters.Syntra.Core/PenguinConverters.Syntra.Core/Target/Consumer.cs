@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PenguinConverters.Keyra;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Source;
 
 namespace PenguinConverters.Syntra.Core.Target;
@@ -23,9 +25,10 @@ public abstract class Consumer : IConsumer
     protected Func<byte[], Type, object>? Deserializer { get; private set; }
 
     /// <summary>
-    /// Gets the discloser function for decrypting protected strings via Keyra.
+    /// Gets the Keyra decryptor used to disclose protected configuration values.
+    /// Owned by the synchronization pipeline; never disposed here.
     /// </summary>
-    protected Func<string, char[]>? Discloser { get; private set; }
+    protected Decryptor? Decryptor { get; private set; }
 
     /// <summary>
     /// Gets or sets the raw configuration bytes.
@@ -69,12 +72,44 @@ public abstract class Consumer : IConsumer
     }
 
     /// <summary>
-    /// Sets the discloser function for credential decryption.
+    /// Sets the Keyra decryptor used to disclose protected configuration values.
     /// </summary>
-    /// <param name="discloser">The discloser function.</param>
-    public void SetDiscloser(Func<string, char[]> discloser)
+    /// <param name="decryptor">The decryptor holding the vault key.</param>
+    public void SetDecryptor(Decryptor decryptor)
     {
-        Discloser = discloser;
+        Decryptor = decryptor;
+    }
+
+    /// <summary>
+    /// Discloses a configuration secret, whether it is stored as plaintext or Keyra ciphertext.
+    /// </summary>
+    /// <param name="secret">The configured secret, or <c>null</c> if the setting was omitted.</param>
+    /// <param name="plaintext">
+    /// When this method returns <c>true</c>, the disclosed characters. The caller owns the array and
+    /// should clear it once the credential has been used.
+    /// </param>
+    /// <returns><c>true</c> if the value was disclosed; otherwise, <c>false</c>.</returns>
+    protected bool TryDisclose(Secret? secret, out char[] plaintext)
+    {
+        plaintext = [];
+
+        if (secret is null)
+            return false;
+
+        // A protected value with no key available fails rather than yielding its ciphertext, so a
+        // misconfigured vault surfaces here instead of as an authentication failure further on.
+        Func<string, char[]>? decrypt = Decryptor is null ? null : Decryptor.Decrypt;
+
+        if (!secret.TryGetValue(decrypt!, out plaintext) || plaintext is null)
+        {
+            Logger.LogError(
+                "Failed to disclose a protected configuration value. Check that the Keyra key is " +
+                "configured and that it is the one the value was protected with.");
+            plaintext = [];
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.Tenable.Source;
@@ -16,15 +17,15 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the API access key.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? AccessKey { get; set; }
+    public Secret? AccessKey { get; set; }
 
     /// <summary>
     /// Gets or sets the API secret key.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? SecretKey { get; set; }
+    public Secret? SecretKey { get; set; }
 
     #endregion
 }

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Entities;
 using PenguinConverters.Syntra.Provider.CMDB.Source;
 
@@ -73,7 +74,7 @@ public class Provider : Core.Source.Provider
             _configuration.Host,
             _configuration.Endpoint);
 
-        // 1. Authenticate via Basic Auth using Username/Password (ProtectedString)
+        // 1. Authenticate via Basic Auth using Username/Password (Secret)
         // 2. Build request URL: https://{Host}{Endpoint}?{Parameters}
         //    Delta: append modified date filter parameter
         // 3. Page through REST API results

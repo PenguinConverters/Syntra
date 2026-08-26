@@ -44,6 +44,7 @@ Define your source-specific settings in `Source/Configuration.cs`:
 ```csharp
 namespace PenguinConverters.Syntra.Provider.{SystemName}.Source;
 
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 public class Configuration
@@ -54,9 +55,9 @@ public class Configuration
     /// <summary>API endpoint or base path.</summary>
     public string Endpoint { get; set; } = string.Empty;
 
-    /// <summary>Authentication credentials (encrypted via Keyra).</summary>
-    public ProtectedString ClientId { get; set; } = new();
-    public ProtectedString ClientSecret { get; set; } = new();
+    /// <summary>Authentication credentials, plaintext or Keyra-protected.</summary>
+    public Secret? ClientId { get; set; }
+    public Secret? ClientSecret { get; set; }
 
     /// <summary>Enable delta synchronization.</summary>
     public bool Delta { get; set; }
@@ -112,6 +113,28 @@ public class Provider : Core.Source.Provider, IProvider
 }
 ```
 
+Resolve credentials through the base class's `TryDisclose`, which handles both plaintext and
+Keyra-protected values and fails cleanly when the key is missing. Clear the characters once
+you have used them — the array is yours:
+
+```csharp
+if (!TryDisclose(_configuration.ClientSecret, out char[] secretChars))
+    throw new InvalidOperationException("The client secret could not be disclosed.");
+
+try
+{
+    Authenticate(_configuration.ClientId, secretChars);
+}
+finally
+{
+    Array.Clear(secretChars, 0, secretChars.Length);
+}
+```
+
+`TryDisclose` returns `false` rather than handing back ciphertext when a value is protected and
+no key is available, so a misconfigured vault reports itself instead of surfacing later as a
+rejected credential.
+
 ### Step 5: Provider Builder
 
 ```csharp
@@ -143,9 +166,10 @@ public class ProviderBuilder : IProviderBuilder
         _provider.SetLogger(logger);
     }
 
-    public void AddDiscloser(Func<string, char[]> discloser)
+    // The pipeline owns the decryptor and disposes it; the provider only borrows it.
+    public void AddDecryptor(Decryptor decryptor)
     {
-        _provider.SetDiscloser(discloser);
+        _provider.SetDecryptor(decryptor);
     }
 
     public IProvider Build()
@@ -240,6 +264,13 @@ Store the delta token from Graph API response. On next run, pass `$deltatoken` p
 ObjectNamespace: "MySystem.Users"
 Delta: true
 MaxDegreeOfParallelism: 3
+# Locates the Keyra key that opens every `Protected: true` value below. Omit the section
+# entirely when the configuration holds no protected values. The key password is not kept
+# here — it comes from SYNTRA_KEYRA_PASSWORD, or from the variable PasswordVariable names.
+Keyra:
+  KeyFile: "D:/secure/syntra.keyra"
+  # …or, with no key file on disk, name the variable holding an armored share:
+  # ShareVariable: "SYNTRA_KEYRA_SHARE"
 Source:
   Type: "PenguinConverters.Syntra.Provider.{SystemName}"
   Host: "https://api.example.com"

@@ -19,7 +19,8 @@ the License.
 THIRD-PARTY COMPONENTS
 --------------------------------------------------------------------------------
 
-Keyra SDK (PenguinConverters.Keyra, PenguinConverters.Keyra.Core)
+Keyra SDK (PenguinConverters.Keyra, PenguinConverters.Keyra.Core,
+           PenguinConverters.CandyStore)
     Copyright Penguin Converters AG. All rights reserved.
 
     The Keyra SDK is a PROPRIETARY component and is NOT covered by the Apache
@@ -27,6 +28,11 @@ Keyra SDK (PenguinConverters.Keyra, PenguinConverters.Keyra.Core)
     NuGet package and its use is governed exclusively by the Keyra Software
     License Agreement. Unauthorized copying, modification or redistribution of
     the Keyra SDK is prohibited.
+
+    Syntra references PenguinConverters.Keyra; Keyra.Core and CandyStore arrive
+    with it as transitive dependencies. Being published on nuget.org makes the
+    packages retrievable without credentials; it does not grant a licence to use
+    them.
 
     No part of the Apache-2.0 grant in this repository conveys any right to use,
     copy, modify, or redistribute the Keyra SDK. A separate Keyra license is

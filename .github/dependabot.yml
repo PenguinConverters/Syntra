@@ -29,9 +29,9 @@ updates:
           - "Moq"
           - "Microsoft.NET.Test.Sdk"
           - "coverlet.*"
-    ignore:
-      # Proprietary, separately licensed — served from a private feed Dependabot cannot reach.
-      - dependency-name: "PenguinConverters.Keyra*"
+      keyra-sdk:
+        patterns:
+          - "PenguinConverters.*"
 
   - package-ecosystem: github-actions
     directory: "/"

@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Provider.ServiceNow.Source;
@@ -38,9 +39,9 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the OAuth client secret for JWT authentication.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? ClientSecret { get; set; }
+    public Secret? ClientSecret { get; set; }
 
     #endregion
 }

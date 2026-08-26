@@ -1,3 +1,4 @@
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Settings;
 
 namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
@@ -37,9 +38,9 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the SQL Server connection string.
-    /// Uses <see cref="ProtectedString"/> for optional Keyra encryption support.
+    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
     /// </summary>
-    public ProtectedString? ConnectionString { get; set; }
+    public Secret? ConnectionString { get; set; }
 
     /// <summary>
     /// Gets or sets the destination table name.

@@ -67,7 +67,7 @@ public interface IProviderBuilder
     void AddMetadata(byte[]? metadata);
     void AddDeserializer(Func<byte[], Type, object> deserializer);
     void AddLogger(ILogger logger);
-    void AddDiscloser(Func<string, char[]> discloser);
+    void AddDecryptor(Decryptor decryptor);
     IProvider Build();
 }
 ```
@@ -87,7 +87,7 @@ public interface IConsumerBuilder
     void AddConfiguration(byte[] configuration);
     void AddDeserializer(Func<byte[], Type, object> deserializer);
     void AddLogger(ILogger logger);
-    void AddDiscloser(Func<string, char[]> discloser);
+    void AddDecryptor(Decryptor decryptor);
     IConsumer Build();
 }
 ```

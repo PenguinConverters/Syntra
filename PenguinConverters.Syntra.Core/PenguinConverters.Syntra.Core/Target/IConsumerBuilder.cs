@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra;
 
 namespace PenguinConverters.Syntra.Core.Target;
 
@@ -35,10 +36,13 @@ public interface IConsumerBuilder
     void AddLogger(ILogger logger);
 
     /// <summary>
-    /// Adds a discloser function for decrypting protected strings via Keyra.
+    /// Adds the Keyra decryptor used to disclose protected configuration values.
     /// </summary>
-    /// <param name="discloser">A function that takes a cipher reference and returns the plaintext characters.</param>
-    void AddDiscloser(Func<string, char[]> discloser);
+    /// <param name="decryptor">
+    /// The decryptor holding the vault key. It is owned by the caller and outlives the consumer,
+    /// so the consumer must not dispose it.
+    /// </param>
+    void AddDecryptor(Decryptor decryptor);
 
     /// <summary>
     /// Builds and returns the configured <see cref="IConsumer"/> instance.

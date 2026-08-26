@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Keyra;
+using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Core.Target;
 using PenguinConverters.Syntra.Consumer.ActiveDirectory.Target;
 
@@ -14,7 +16,7 @@ public class ConsumerBuilder : IConsumerBuilder
 
     private readonly Consumer _consumer = new();
     private Func<byte[], Type, object>? _deserializer;
-    private Func<string, char[]>? _discloser;
+    private Decryptor? _decryptor;
     private ILogger? _logger;
     private byte[]? _configuration;
     private byte[]? _metadata;
@@ -36,13 +38,13 @@ public class ConsumerBuilder : IConsumerBuilder
     public void AddLogger(ILogger logger) => _logger = logger;
 
     /// <inheritdoc />
-    public void AddDiscloser(Func<string, char[]> discloser) => _discloser = discloser;
+    public void AddDecryptor(Decryptor decryptor) => _decryptor = decryptor;
 
     /// <inheritdoc />
     public IConsumer Build()
     {
         if (_deserializer is not null) _consumer.SetDeserializer(_deserializer);
-        if (_discloser is not null) _consumer.SetDiscloser(_discloser);
+        if (_decryptor is not null) _consumer.SetDecryptor(_decryptor);
         if (_logger is not null) _consumer.SetLogger(_logger);
 
         if (_configuration is not null)
@@ -80,7 +82,8 @@ public class ConsumerBuilder : IConsumerBuilder
         //       .AddBaseDN(config.BaseDN)
         //       .AddPort(config.Port)
         //       .AddAuthType(config.AuthType)
-        //       .AddCredentials(username, password)  // via ProtectedString.TryGetValue
+        //       .AddCredentials(username, password)  // Secret values from the configuration
+        //       .AddDecryptor(_decryptor)            // discloses them when they are protected
         //       .AddSchemaDecoders()
         //       .Build();
     }

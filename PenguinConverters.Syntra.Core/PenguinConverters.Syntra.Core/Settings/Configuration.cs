@@ -39,6 +39,12 @@ public class Configuration
     public CertificateSettings? Certificate { get; set; }
 
     /// <summary>
+    /// Gets or sets the Keyra vault key location used to disclose protected values in this
+    /// configuration. Required only when a configuration actually carries a protected value.
+    /// </summary>
+    public KeyraSettings? Keyra { get; set; }
+
+    /// <summary>
     /// Gets or sets threshold values used for synchronization safety checks.
     /// Keys are threshold names (e.g., <c>MaxDeletes</c>, <c>MaxErrors</c>)
     /// and values are the numeric limits.
