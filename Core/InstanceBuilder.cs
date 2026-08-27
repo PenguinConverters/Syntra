@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PenguinConverters.Keyra;
+using PenguinConverters.Syntra.Core.Security;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Core.Target;
 
@@ -14,6 +15,16 @@ namespace PenguinConverters.Syntra.Core;
 /// <typeparam name="T">The builder interface type: <see cref="IProviderBuilder"/> or <see cref="IConsumerBuilder"/>.</typeparam>
 public class InstanceBuilder<T> where T : class
 {
+    #region Constants
+
+    /// <summary>
+    /// Directory beneath the application a connector deployed as a file may be placed in, so that
+    /// what an operator has added stays visibly apart from what shipped.
+    /// </summary>
+    public const string ConnectorDirectoryName = "connectors";
+
+    #endregion
+
     #region Fields
 
     private readonly string _assemblyName;
@@ -23,6 +34,7 @@ public class InstanceBuilder<T> where T : class
     private Decryptor? _decryptor;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _expectedPublicKey;
+    private string? _expectedPublisher;
 
     #endregion
 
@@ -112,6 +124,23 @@ public class InstanceBuilder<T> where T : class
     }
 
     /// <summary>
+    /// Sets the publisher a connector's Authenticode signature is expected to name.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to the publisher of the assembly this type lives in, so a connector is expected to
+    /// come from whoever produced the framework it plugs into. A mismatch is reported and does not
+    /// stop the connector loading: an operator's own build is a legitimate thing to run, and this
+    /// records what was run rather than deciding it.
+    /// </remarks>
+    /// <param name="publisher">The common name of the expected signing certificate.</param>
+    /// <returns>This builder instance for fluent chaining.</returns>
+    public InstanceBuilder<T> WithPublisher(string publisher)
+    {
+        _expectedPublisher = publisher;
+        return this;
+    }
+
+    /// <summary>
     /// Loads the assembly, discovers the builder implementation, configures it,
     /// and builds the provider or consumer instance.
     /// </summary>
@@ -146,16 +175,193 @@ public class InstanceBuilder<T> where T : class
         };
     }
 
-    private static Assembly LoadAssembly(string assemblyName)
+    /// <summary>
+    /// Loads a connector assembly, whether it was referenced at build time or dropped into the
+    /// application directory as a file.
+    /// </summary>
+    /// <remarks>
+    /// A referenced connector is listed in the application's <c>deps.json</c> and resolves through
+    /// the default load context. A connector deployed as a file is not, and the default context of
+    /// .NET does not probe the application directory for it - the .NET Framework loader did, which
+    /// is why dropping an assembly beside the host used to be all that was required. The probe
+    /// below restores that, so both deployments work.
+    /// <para>
+    /// The identity of a candidate file is read from its manifest before anything is loaded, so an
+    /// assembly signed with another key is never brought into the process at all.
+    /// </para>
+    /// </remarks>
+    /// <param name="assemblyName">The simple name of the connector assembly.</param>
+    /// <returns>The loaded assembly.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the assembly cannot be found, or when a file was found but is signed with a
+    /// different key than the one expected.
+    /// </exception>
+    private Assembly LoadAssembly(string assemblyName)
     {
         try
         {
             return Assembly.Load(new AssemblyName(assemblyName));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or BadImageFormatException)
+        {
+            _logger.LogDebug(
+                "'{Assembly}' is not referenced by this application; looking for it as a file.",
+                assemblyName);
+        }
+
+        List<string> searched = [];
+
+        foreach (string directory in GetProbeDirectories())
+        {
+            string path = Path.Combine(directory, $"{assemblyName}.dll");
+
+            searched.Add(path);
+
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            AssemblyName candidate;
+
+            try
+            {
+                candidate = AssemblyName.GetAssemblyName(path);
+            }
+            catch (BadImageFormatException)
+            {
+                _logger.LogWarning("'{Path}' is not a managed assembly.", path);
+                continue;
+            }
+
+            ValidatePublicKey(candidate.GetPublicKey(), path);
+
+            ReportPublisher(path);
+
+            _logger.LogInformation("Loading connector '{Assembly}' from '{Path}'.", assemblyName, path);
+
+            // LoadFrom rather than a bare Load: it resolves the assembly's own dependencies from
+            // the directory it was found in, so a connector that brings its own libraries works
+            // when it is deployed as a set of files.
+            return Assembly.LoadFrom(path);
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to load assembly '{assemblyName}'. It is neither referenced by this "
+            + $"application nor present as a file in: {string.Join(", ", searched)}.");
+    }
+
+    /// <summary>
+    /// Returns the directories a connector deployed as a file is looked for in, nearest first.
+    /// </summary>
+    /// <returns>The directories.</returns>
+    private static IEnumerable<string> GetProbeDirectories()
+    {
+        string baseDirectory = AppContext.BaseDirectory;
+
+        // A dedicated directory keeps a deployment's connectors apart from the host's own files,
+        // which matters when an operator has to see at a glance what has been added.
+        string connectors = Path.Combine(baseDirectory, ConnectorDirectoryName);
+
+        if (Directory.Exists(connectors))
+        {
+            yield return connectors;
+        }
+
+        yield return baseDirectory;
+    }
+
+    /// <summary>
+    /// Reports who signed a connector found as a file.
+    /// </summary>
+    /// <remarks>
+    /// This never stops a load. A connector built in-house, or one taken from a branch during an
+    /// investigation, is a legitimate thing to run, and refusing it would make the loader an
+    /// obstacle rather than a record. What it does is put the publisher in the log, so the question
+    /// "where did this connector come from" has an answer taken from the file itself rather than
+    /// from whoever remembers deploying it.
+    /// <para>
+    /// It is the check a strong name cannot make: .NET does not verify strong-name signatures on
+    /// load, so the key establishes identity only. Authenticode establishes authorship, and that
+    /// the bytes have not changed since they were signed.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The connector file.</param>
+    private void ReportPublisher(string path)
+    {
+        string? expected = _expectedPublisher
+            ?? PublisherVerifier.GetPublisher(typeof(InstanceBuilder<T>).Assembly.Location);
+
+        PublisherVerification verification = PublisherVerifier.Verify(path, expected);
+
+        switch (verification.Trust)
+        {
+            case PublisherTrust.Trusted:
+                _logger.LogInformation(
+                    "Connector '{Path}' is signed by '{Publisher}'.", path, verification.Subject);
+                break;
+
+            case PublisherTrust.Untrusted:
+                _logger.LogWarning(
+                    "Connector '{Path}' is signed by '{Publisher}', which is not the expected "
+                    + "publisher '{Expected}'. Loading it anyway.",
+                    path, verification.Subject, expected);
+                break;
+
+            case PublisherTrust.Unsigned:
+                _logger.LogWarning(
+                    "Connector '{Path}' carries no publisher signature, so who produced it cannot "
+                    + "be established. Loading it anyway.", path);
+                break;
+
+            case PublisherTrust.Invalid:
+                _logger.LogWarning(
+                    "Connector '{Path}' has a publisher signature that does not verify: {Detail} "
+                    + "Loading it anyway.", path, verification.Detail);
+                break;
+
+            default:
+                _logger.LogDebug("Publisher of '{Path}' was not checked: {Detail}", path, verification.Detail);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Verifies that a connector found as a file carries the expected strong name.
+    /// </summary>
+    /// <remarks>
+    /// The expected key defaults to the one this assembly is signed with, so a file dropped into a
+    /// deployment has to be signed with the same key as the framework it plugs into. Configuring an
+    /// expectation explicitly replaces that default.
+    /// <para>
+    /// This is an identity check and not a proof of authorship: .NET does not verify strong-name
+    /// signatures when it loads an assembly, so a key here establishes which assembly claims to be
+    /// which, not who produced it. Authorship is what Authenticode establishes, and that is
+    /// verified when a release is signed rather than when it is loaded.
+    /// </para>
+    /// </remarks>
+    /// <param name="publicKey">The public key the candidate file carries, if any.</param>
+    /// <param name="path">The file, for the failure message.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the key does not match.</exception>
+    private void ValidatePublicKey(byte[]? publicKey, string path)
+    {
+        byte[]? expected = _expectedPublicKey ?? typeof(InstanceBuilder<T>).Assembly.GetName().GetPublicKey();
+
+        if (expected is null || expected.Length == 0)
+        {
+            return;
+        }
+
+        if (publicKey is null || publicKey.Length == 0)
         {
             throw new InvalidOperationException(
-                $"Failed to load assembly '{assemblyName}'. Ensure it is available in the application directory.", ex);
+                $"'{path}' is not strong-named, so it cannot be loaded as a connector.");
+        }
+
+        if (!publicKey.SequenceEqual(expected))
+        {
+            throw new InvalidOperationException(
+                $"'{path}' is signed with a different key than the one expected, so it was not loaded.");
         }
     }
 
