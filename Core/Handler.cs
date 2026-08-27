@@ -119,6 +119,13 @@ public class Handler
 
                 SourceMetadata = provider.Metadata;
                 HadErrors = HadErrors || consumer.HadErrors;
+
+                // A connector may hold a connection pool, an open directory binding or a session
+                // it negotiated with the source. Reading the metadata is the last thing asked of
+                // it, so anything it holds is released here rather than left for a collection
+                // that a long-running host may not reach for hours.
+                await ReleaseAsync(provider).ConfigureAwait(false);
+                await ReleaseAsync(consumer).ConfigureAwait(false);
             }
         }
         finally
@@ -127,6 +134,38 @@ public class Handler
         }
 
         _logger.LogInformation("Synchronization completed. HadErrors: {HadErrors}", HadErrors);
+    }
+
+    /// <summary>
+    /// Releases a connector that holds resources, whichever disposal contract it implements.
+    /// </summary>
+    /// <remarks>
+    /// Neither <see cref="IProvider"/> nor <see cref="IConsumer"/> requires disposal, because most
+    /// connectors hold nothing. One that does opts in by implementing a disposal interface, and
+    /// this is where that is honoured. A failure to release is logged rather than propagated: the
+    /// synchronization has already finished, and its outcome is not in question.
+    /// </remarks>
+    /// <param name="connector">The connector to release.</param>
+    /// <returns>A task that completes when the connector has been released.</returns>
+    private async ValueTask ReleaseAsync(object connector)
+    {
+        try
+        {
+            switch (connector)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to release {Connector}.", connector.GetType().Name);
+        }
     }
 
     private Decryptor OpenDecryptor(KeyraSettings keyra)
