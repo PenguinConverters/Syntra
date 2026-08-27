@@ -96,10 +96,25 @@ A file is only loaded if it carries the **same strong name as `Core`**. The iden
 the file's manifest before anything is loaded, so an assembly signed with another key never enters
 the process. `WithPublicKey` replaces that expectation when a deployment trusts a different key.
 
-> A strong name is an identity, not a proof of authorship: .NET does not verify strong-name
-> signatures when it loads an assembly, so this establishes *which* assembly claims to be which,
-> not *who* produced it. Authorship is what Authenticode establishes, and that is verified when a
-> release is signed rather than when a connector is loaded.
+A strong name is an identity, not a proof of authorship: .NET does not verify strong-name
+signatures when it loads an assembly, so it establishes *which* assembly claims to be which, not
+*who* produced it.
+
+Authorship is what Authenticode establishes, and the loader checks it. The publisher of a connector
+file is verified against the publisher of `Core` itself, and the result is **logged, never
+enforced**:
+
+| Result | Logged as |
+|---|---|
+| Signed by the expected publisher | information |
+| Signed by somebody else | **warning**, and loaded |
+| Not signed at all | **warning**, and loaded |
+| Signature does not verify | **warning**, and loaded |
+| Not on Windows | debug - Authenticode is a Windows facility |
+
+Nothing is refused on this basis. An in-house build, or a connector taken from a branch during an
+investigation, is a legitimate thing to run; the loader records what was run rather than deciding
+it. `WithPublisher` replaces the expected publisher where a deployment trusts a different one.
 
 Either way the reference decides only what is *deployed*. `InstanceBuilder` still resolves a
 connector by name from configuration, so a deployment enables only the connectors its configuration

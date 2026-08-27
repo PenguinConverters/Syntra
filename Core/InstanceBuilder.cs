@@ -2,6 +2,7 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using PenguinConverters.Keyra;
+using PenguinConverters.Syntra.Core.Security;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Core.Target;
 
@@ -33,6 +34,7 @@ public class InstanceBuilder<T> where T : class
     private Decryptor? _decryptor;
     private ILogger _logger = NullLogger.Instance;
     private byte[]? _expectedPublicKey;
+    private string? _expectedPublisher;
 
     #endregion
 
@@ -118,6 +120,23 @@ public class InstanceBuilder<T> where T : class
     public InstanceBuilder<T> WithPublicKey(byte[] publicKey)
     {
         _expectedPublicKey = publicKey;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets the publisher a connector's Authenticode signature is expected to name.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to the publisher of the assembly this type lives in, so a connector is expected to
+    /// come from whoever produced the framework it plugs into. A mismatch is reported and does not
+    /// stop the connector loading: an operator's own build is a legitimate thing to run, and this
+    /// records what was run rather than deciding it.
+    /// </remarks>
+    /// <param name="publisher">The common name of the expected signing certificate.</param>
+    /// <returns>This builder instance for fluent chaining.</returns>
+    public InstanceBuilder<T> WithPublisher(string publisher)
+    {
+        _expectedPublisher = publisher;
         return this;
     }
 
@@ -217,6 +236,8 @@ public class InstanceBuilder<T> where T : class
 
             ValidatePublicKey(candidate.GetPublicKey(), path);
 
+            ReportPublisher(path);
+
             _logger.LogInformation("Loading connector '{Assembly}' from '{Path}'.", assemblyName, path);
 
             // LoadFrom rather than a bare Load: it resolves the assembly's own dependencies from
@@ -248,6 +269,61 @@ public class InstanceBuilder<T> where T : class
         }
 
         yield return baseDirectory;
+    }
+
+    /// <summary>
+    /// Reports who signed a connector found as a file.
+    /// </summary>
+    /// <remarks>
+    /// This never stops a load. A connector built in-house, or one taken from a branch during an
+    /// investigation, is a legitimate thing to run, and refusing it would make the loader an
+    /// obstacle rather than a record. What it does is put the publisher in the log, so the question
+    /// "where did this connector come from" has an answer taken from the file itself rather than
+    /// from whoever remembers deploying it.
+    /// <para>
+    /// It is the check a strong name cannot make: .NET does not verify strong-name signatures on
+    /// load, so the key establishes identity only. Authenticode establishes authorship, and that
+    /// the bytes have not changed since they were signed.
+    /// </para>
+    /// </remarks>
+    /// <param name="path">The connector file.</param>
+    private void ReportPublisher(string path)
+    {
+        string? expected = _expectedPublisher
+            ?? PublisherVerifier.GetPublisher(typeof(InstanceBuilder<T>).Assembly.Location);
+
+        PublisherVerification verification = PublisherVerifier.Verify(path, expected);
+
+        switch (verification.Trust)
+        {
+            case PublisherTrust.Trusted:
+                _logger.LogInformation(
+                    "Connector '{Path}' is signed by '{Publisher}'.", path, verification.Subject);
+                break;
+
+            case PublisherTrust.Untrusted:
+                _logger.LogWarning(
+                    "Connector '{Path}' is signed by '{Publisher}', which is not the expected "
+                    + "publisher '{Expected}'. Loading it anyway.",
+                    path, verification.Subject, expected);
+                break;
+
+            case PublisherTrust.Unsigned:
+                _logger.LogWarning(
+                    "Connector '{Path}' carries no publisher signature, so who produced it cannot "
+                    + "be established. Loading it anyway.", path);
+                break;
+
+            case PublisherTrust.Invalid:
+                _logger.LogWarning(
+                    "Connector '{Path}' has a publisher signature that does not verify: {Detail} "
+                    + "Loading it anyway.", path, verification.Detail);
+                break;
+
+            default:
+                _logger.LogDebug("Publisher of '{Path}' was not checked: {Detail}", path, verification.Detail);
+                break;
+        }
     }
 
     /// <summary>
