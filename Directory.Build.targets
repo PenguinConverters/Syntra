@@ -63,4 +63,21 @@
     </ArtifactReference>
   </ItemGroup>
 
+  <!--
+    A library here is loaded by name at run time and may be dropped into a deployment as a file,
+    so its assembly name is an identity rather than a filename: it has to be unambiguous among
+    everything else in an application directory. Only an executable may be short, because that
+    name is what an operator types.
+
+    Checked in the targets rather than the props because the project has been evaluated by then,
+    so OutputType and any name the project set for itself are both known.
+  -->
+  <Target Name="ValidateAssemblyName"
+          BeforeTargets="CoreCompile"
+          Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' And '$(OutputType)' == 'Library' ">
+    <Error Condition=" !$(AssemblyName.StartsWith('PenguinConverters.Syntra.')) "
+           Code="SYNTRA0001"
+           Text="Assembly name '$(AssemblyName)' must begin with 'PenguinConverters.Syntra.'. Only an executable may carry a short name." />
+  </Target>
+
 </Project>

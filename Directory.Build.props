@@ -78,6 +78,22 @@
     </InternalsVisibleTo>
   </ItemDefinitionGroup>
 
+  <!--
+    Assembly identity follows the folder, so a project called Provider.Tenable produces
+    PenguinConverters.Syntra.Provider.Tenable.dll without saying so itself. Set here rather than
+    in each project because the SDK's default is the bare project name: a new connector that
+    simply forgot the property would ship as Provider.Tenable.dll, collide with anybody else's
+    assembly of that name, and be loaded by an InstanceBuilder that asks for the long one.
+
+    A project that needs a different name states it and wins, because this is evaluated before
+    the project body. Host.Console does exactly that: an executable is a command somebody types.
+    Directory.Build.targets refuses a library that tries the same.
+  -->
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
+    <AssemblyName>PenguinConverters.Syntra.$(MSBuildProjectName)</AssemblyName>
+    <RootNamespace>PenguinConverters.Syntra.$(MSBuildProjectName)</RootNamespace>
+  </PropertyGroup>
+
   <!-- NuGet package metadata: every project in this repository is independently publishable. -->
   <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
