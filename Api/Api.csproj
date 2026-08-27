@@ -23,4 +23,19 @@
     <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Self-contained when a runtime identifier is given, so a deployed host needs no
+    .NET runtime installed. It is conditional because a build without a RID - which
+    is what CI and every local build does - cannot produce a self-contained app and
+    would fail outright.
+
+    Never trimmed: connectors are resolved by name through reflection, and the
+    trimmer cannot see those references. It would remove them, and the failure
+    would surface only at run time on a customer's server.
+  -->
+  <PropertyGroup Condition=" '$(RuntimeIdentifier)' != '' ">
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
 </Project>
