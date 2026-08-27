@@ -7,6 +7,7 @@ using Microsoft.Kiota.Authentication.Azure;
 using Microsoft.Kiota.Http.HttpClientLibrary;
 using Microsoft.Kiota.Http.HttpClientLibrary.Middleware.Options;
 using PenguinConverters.Keyra;
+using PenguinConverters.Syntra.Core.Extensions;
 using PenguinConverters.Syntra.Core.Source;
 using PenguinConverters.Syntra.Provider.EntraID.Source;
 
@@ -129,10 +130,15 @@ public class ProviderBuilder : IProviderBuilder
             return;
         }
 
-        if (!Uri.TryCreate(configuration.BaseUrl, UriKind.Absolute, out Uri? baseUrl))
+        // Not UriKind.Absolute on its own: on a Unix host a leading slash makes "/v1.0" an
+        // absolute file URL, which would pass the check and then yield an empty host to the
+        // allowed-hosts validator and a "file://" scope to the credential. Requiring a web scheme
+        // fails the misconfiguration here, with the reason, rather than at the first request.
+        if (!UrlResolver.IsAbsolute(configuration.BaseUrl, out Uri? baseUrl))
         {
             _logger?.LogError(
-                "'{BaseUrl}' is not an absolute URL, so no Graph service root can be resolved.",
+                "'{BaseUrl}' is not an absolute http or https URL, so no Graph service root can "
+                + "be resolved.",
                 configuration.BaseUrl);
             return;
         }

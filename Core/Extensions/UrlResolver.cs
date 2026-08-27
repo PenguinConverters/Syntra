@@ -1,4 +1,6 @@
-namespace PenguinConverters.Syntra.Provider.RESTful.Source;
+using System.Diagnostics.CodeAnalysis;
+
+namespace PenguinConverters.Syntra.Core.Extensions;
 
 /// <summary>
 /// Resolves the URLs a configuration and an API response state, which may be absolute or
@@ -10,6 +12,11 @@ namespace PenguinConverters.Syntra.Provider.RESTful.Source;
 /// root-relative endpoint parses successfully and then addresses the local filesystem instead of
 /// the API - on Linux only, which is where the service host runs. Only an <c>http</c> or
 /// <c>https</c> URL is treated as absolute here; anything else is resolved against its base.
+/// <para>
+/// This lives in the core rather than in one connector because every connector that reads an
+/// HTTP API has to settle the same question, and each one answering it separately is how the
+/// mistake gets made again.
+/// </para>
 /// </remarks>
 public static class UrlResolver
 {
@@ -21,7 +28,7 @@ public static class UrlResolver
     /// <param name="url">The URL.</param>
     /// <param name="absolute">When this method returns <c>true</c>, the parsed URL.</param>
     /// <returns><c>true</c> when the URL is an absolute web URL; otherwise, <c>false</c>.</returns>
-    public static bool IsAbsolute(string? url, out Uri? absolute)
+    public static bool IsAbsolute(string? url, [NotNullWhen(true)] out Uri? absolute)
     {
         absolute = null;
 
@@ -48,7 +55,7 @@ public static class UrlResolver
     public static string Resolve(string baseUrl, string url)
     {
         return IsAbsolute(url, out Uri? absolute)
-            ? absolute!.ToString()
+            ? absolute.ToString()
             : new Uri(new Uri(baseUrl), url).ToString();
     }
 

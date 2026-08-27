@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Syntra.Core.Extensions;
 using Microsoft.Kiota.Abstractions.Authentication;
 using PenguinConverters.Keyra.Settings;
 using PenguinConverters.Syntra.Provider.RESTful.Source;
@@ -310,7 +311,7 @@ public sealed class EndpointAccessTokenProvider : IAccessTokenProvider, IDisposa
 
         if (UrlResolver.IsAbsolute(endPoint, out Uri? absolute))
         {
-            return absolute!.ToString();
+            return absolute.ToString();
         }
 
         return string.IsNullOrWhiteSpace(_baseUrl)

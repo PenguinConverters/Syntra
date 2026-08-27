@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using PenguinConverters.Syntra.Core.Extensions;
 using PenguinConverters.Syntra.Core.Types;
 
 namespace PenguinConverters.Syntra.Provider.RESTful.Source;
