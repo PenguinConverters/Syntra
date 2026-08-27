@@ -24,6 +24,44 @@
     <FileVersion>1.0.0.0</FileVersion>
   </PropertyGroup>
 
+  <!--
+    Strong naming gives every assembly here a stable identity, which is what a connector loaded by
+    name at runtime is resolved against and what an InternalsVisibleTo grant is checked against.
+
+    The key is committed deliberately. A strong name is an identity, not a security boundary: it
+    says which assembly this is, not who published it or that it is unmodified. That is
+    Authenticode's job, and its key is hardware-held and never goes near this repository. Since
+    .NET Core the runtime does not verify strong-name signatures when it loads an assembly, so
+    holding this key grants no capability that building an unsigned assembly of the same name
+    would not. Every .NET project that publishes its source does the same, the runtime itself
+    included.
+
+    It applies to test projects as well as shipping ones. A strong-named assembly can only open
+    its internals to another assembly signed with the same key, and Consumer.AzureSQL grants
+    exactly that to its test project.
+
+    Database projects are excluded: Microsoft.Build.Sql produces a .dacpac, which carries no
+    assembly identity to sign.
+  -->
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Syntra.snk</AssemblyOriginatorKeyFile>
+    <SyntraPublicKey>00240000048000001401000006020000002400005253413100080000010001006d33e64d2b0aa70ff8daf2a9396d0445fd7fb0304fafabde465e22934a154ab44fa83495e2b0725763f7bef4249a1e5b730f12d0b371fa312d037d0dce06f3a826f5ce5956f82c80ccf048800026f672602e2f019407780d11d18a367cd9bcd22bc614a50407d2d640df52befcb0b1ca4f9c25546160777f2f5f5c9679c6c7f65cb2b19bae7754169b7f20ba7a4489fa4ecc1c90b7716984a5ac7e71c5aaf3d79264f2766d57961c22b8f13a7e15a14a4c7d101a98ee8bce083c6c20a6e5d1ad551eb50078c465c82ca5f936330b3a1d5c6eef7fd27ede0650c1cf5d26caa5c8d6db05d0d605d67124341221822f4ed4589265aeeadd460e15742f0d322bf399</SyntraPublicKey>
+  </PropertyGroup>
+
+  <!--
+    A strong-named assembly may only open its internals to an assembly signed with the same key,
+    and the grant has to name that key in full - the SDK does not infer it from the key the
+    project is being signed with. Stamping it here means a project writes the grant as
+    <InternalsVisibleTo Include="..." /> and gets the key without repeating it, so the next one
+    added cannot forget it and break the build.
+  -->
+  <ItemDefinitionGroup Condition=" '$(SignAssembly)' == 'true' ">
+    <InternalsVisibleTo>
+      <Key>$(SyntraPublicKey)</Key>
+    </InternalsVisibleTo>
+  </ItemDefinitionGroup>
+
   <!-- NuGet package metadata: every project in this repository is independently publishable. -->
   <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
