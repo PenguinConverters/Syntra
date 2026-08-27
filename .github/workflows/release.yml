@@ -164,9 +164,9 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------------
-  # Self-contained, so a target server needs no .NET runtime installed. Neither
-  # single-file nor trimmed: connectors are resolved by assembly name at runtime,
-  # and both of those transformations break reflection-based loading.
+  # Self-contained, so a target server needs no .NET runtime installed, and never
+  # trimmed - both settled in the host projects themselves, so a hand-run publish
+  # produces the same thing this job does.
   # ---------------------------------------------------------------------------
   publish:
     name: Publish (${{ matrix.rid }})
@@ -191,33 +191,23 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Publish hosts and connectors
+      - name: Publish hosts
         env:
           VERSION: ${{ needs.version.outputs.version }}
           RID: ${{ matrix.rid }}
         run: |
           set -euo pipefail
 
-          publish_app () {
-            local project="$1" label="$2" out="stage/$label"
+          # Self-contained comes from the project, which turns it on whenever a
+          # runtime identifier is given. Connectors are project references, so a
+          # single publish carries them and lists them in deps.json - which is
+          # what makes Assembly.Load able to resolve one at run time.
+          for app in "Host.Console:console" "Host.Service:service"; do
+            project="${app%%:*}"
+            label="${app##*:}"
 
-            dotnet publish "$project/$project.csproj" \
-              -c Release -r "$RID" --self-contained true \
-              -p:Version="$VERSION" \
-              -p:PublishSingleFile=false -p:PublishTrimmed=false \
-              -o "$out" --nologo
-
-            # The hosts reference only Core; every connector is loaded by name at
-            # runtime, so nothing pulls them into the publish output. They are
-            # published into the same folder deliberately, which is where any
-            # resolver fix will look for them.
-            while IFS= read -r connector; do
-              dotnet publish "$connector" -c Release -p:Version="$VERSION" -o "$out" --nologo
-            done < <(find Provider.* Consumer.* -maxdepth 1 -name '*.csproj' ! -name '*.Tests.csproj' | sort)
-          }
-
-          publish_app Host.Console console
-          publish_app Host.Service service
+            dotnet publish "$project/$project.csproj"               -c Release -r "$RID"               -p:Version="$VERSION"               -o "stage/$label" --nologo
+          done
 
       - name: Archive
         env:

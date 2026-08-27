@@ -17,4 +17,47 @@
     <ProjectReference Include="..\Core\Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Every connector is referenced so that it ships with the host and is listed in
+    the application's deps.json. Connectors are still selected by name at run time
+    from configuration - the reference decides what is deployed, not what is used.
+    Without it Assembly.Load cannot resolve a connector at all: the default load
+    context reads deps.json and does not probe the application directory, so a
+    connector sitting beside the executable is invisible to it.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Consumer.ActiveDirectory\Consumer.ActiveDirectory.csproj" />
+    <ProjectReference Include="..\Consumer.AzureSQL\Consumer.AzureSQL.csproj" />
+    <ProjectReference Include="..\Consumer.SchemaDesigner\Consumer.SchemaDesigner.csproj" />
+    <ProjectReference Include="..\Provider.ActiveDirectory\Provider.ActiveDirectory.csproj" />
+    <ProjectReference Include="..\Provider.AzureResources\Provider.AzureResources.csproj" />
+    <ProjectReference Include="..\Provider.AzureSQL\Provider.AzureSQL.csproj" />
+    <ProjectReference Include="..\Provider.Ciphersuite\Provider.Ciphersuite.csproj" />
+    <ProjectReference Include="..\Provider.CMDB\Provider.CMDB.csproj" />
+    <ProjectReference Include="..\Provider.DevOps\Provider.DevOps.csproj" />
+    <ProjectReference Include="..\Provider.EntraID\Provider.EntraID.csproj" />
+    <ProjectReference Include="..\Provider.Exchange\Provider.Exchange.csproj" />
+    <ProjectReference Include="..\Provider.Infoblox\Provider.Infoblox.csproj" />
+    <ProjectReference Include="..\Provider.Oracle\Provider.Oracle.csproj" />
+    <ProjectReference Include="..\Provider.RESTful\Provider.RESTful.csproj" />
+    <ProjectReference Include="..\Provider.ServiceNow\Provider.ServiceNow.csproj" />
+    <ProjectReference Include="..\Provider.Tenable\Provider.Tenable.csproj" />
+    <ProjectReference Include="..\Provider.Tufin\Provider.Tufin.csproj" />
+  </ItemGroup>
+
+  <!--
+    Self-contained when a runtime identifier is given, so a deployed host needs no
+    .NET runtime installed. It is conditional because a build without a RID - which
+    is what CI and every local build does - cannot produce a self-contained app and
+    would fail outright.
+
+    Never trimmed: connectors are resolved by name through reflection, and the
+    trimmer cannot see those references. It would remove them, and the failure
+    would surface only at run time on a customer's server.
+  -->
+  <PropertyGroup Condition=" '$(RuntimeIdentifier)' != '' ">
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
 </Project>

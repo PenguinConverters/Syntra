@@ -68,20 +68,29 @@ syntra-service-1.0.0.26-linux-x64.tar.gz
 SHA256SUMS.txt
 ```
 
-Each archive is **self-contained**, so a target server needs no .NET runtime installed. Neither
-single-file nor trimmed: connectors are resolved by assembly name at runtime, and both of those
-transformations break reflection-based loading.
+Each archive is **self-contained**, so a target server needs no .NET runtime installed. That is
+set in the host projects themselves - conditioned on a runtime identifier being given, because a
+build without one cannot produce a self-contained app - so a hand-run `dotnet publish -r win-x64`
+produces the same thing CI does.
 
-The hosts reference only `Core`. Every connector is loaded by name, so nothing pulls them into the
-publish output automatically - the workflow publishes each connector into the same folder
-deliberately.
+Nothing is ever **trimmed**. Connectors are resolved by name through reflection, which the trimmer
+cannot see; it would remove them and the failure would surface only at run time on a customer's
+server.
 
-> **Known gap.** `InstanceBuilder` resolves a connector with `Assembly.Load`, which reads the
-> application's `deps.json` and does not probe the application directory. A connector sitting beside
-> the host is therefore **not** found at runtime. The archives carry the connectors, but loading
-> them needs a resolver change in `Core` - an `AssemblyDependencyResolver`, a `Resolving` handler,
-> or `Assembly.LoadFrom` against a known directory. Until that lands, a release is packaged
-> correctly but a deployed host will not find its connectors.
+## How connectors reach the host
+
+Every connector is a project reference of both hosts. That is what puts it in the application's
+`deps.json`, and `deps.json` is what `Assembly.Load` reads - the default load context does **not**
+probe the application directory, so a connector merely sitting beside the executable is invisible
+to it.
+
+The reference decides what is *deployed*. It does not decide what is *used*: `InstanceBuilder`
+still resolves a connector by name from configuration at run time, so a deployment enables only the
+connectors its configuration names.
+
+The trade is that adding a connector now means adding a reference to `Host.Console` and
+`Host.Service`, and that a connector which fails to build fails the host build with it. That is the
+cost of a host that can actually load what it ships.
 
 ## Who can release
 
