@@ -30,6 +30,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # gh works out which repository it is talking to from the git remote, and the job that stages
+  # the draft never checks the repository out - it only downloads artifacts. Naming the repository
+  # outright means no job needs a working tree simply to call the API.
+  GH_REPO: ${{ github.repository }}
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
