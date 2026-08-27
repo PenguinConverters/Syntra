@@ -84,7 +84,10 @@ jobs:
           # history. A tag on a side branch is refused here rather than being
           # discovered after the artifacts are built.
           if [ "${{ github.event_name }}" = "push" ]; then
-            git fetch --no-tags --depth=0 origin main
+            # An explicit refspec, so origin/main exists as a ref to compare against: a bare
+            # "git fetch origin main" only guarantees FETCH_HEAD, and the checkout for a tag does
+            # not necessarily configure a refspec that would update the remote-tracking branch.
+            git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
             if ! git merge-base --is-ancestor "$commit" origin/main; then
               echo "::error::Tag '$RAW' points at $commit, which is not contained in main."
               exit 1
