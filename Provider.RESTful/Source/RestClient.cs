@@ -389,9 +389,7 @@ public sealed class RestClient : IDisposable
     /// <returns>The absolute URL.</returns>
     private static string Resolve(string requestUri, string link)
     {
-        return Uri.TryCreate(link, UriKind.Absolute, out Uri? absolute)
-            ? absolute.ToString()
-            : new Uri(new Uri(requestUri), link).ToString();
+        return UrlResolver.Resolve(requestUri, link);
     }
 
     /// <summary>

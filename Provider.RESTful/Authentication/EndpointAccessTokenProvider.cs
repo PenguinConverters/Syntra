@@ -308,9 +308,9 @@ public sealed class EndpointAccessTokenProvider : IAccessTokenProvider, IDisposa
             return null;
         }
 
-        if (Uri.TryCreate(endPoint, UriKind.Absolute, out Uri? absolute))
+        if (UrlResolver.IsAbsolute(endPoint, out Uri? absolute))
         {
-            return absolute.ToString();
+            return absolute!.ToString();
         }
 
         return string.IsNullOrWhiteSpace(_baseUrl)

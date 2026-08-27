@@ -112,6 +112,34 @@ public class RestClientTests
     }
 
     [Test]
+    public async Task ReadAsync_WithARootRelativeNextLink_KeepsTheSchemeAndHost()
+    {
+        //Arrange
+        // A leading slash parses as an absolute file URL on a Unix host, so a next link stated
+        // this way must not be taken as absolute.
+        StubHttpMessageHandler transport = new StubHttpMessageHandler(
+            """{"value":[{"id":1}],"nextLink":"/api/page2"}""",
+            """{"value":[{"id":2}]}""");
+
+        Configuration configuration = new Configuration
+        {
+            ResultPath = "value",
+            Pagination = new PaginationSettings
+            {
+                Mode = PaginationMode.NextLink,
+                NextLinkPath = "nextLink"
+            }
+        };
+
+        //Act
+        List<QuickDictionary> entries = await ReadAllAsync(transport, configuration);
+
+        //Assert
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(transport.RequestUris[1], Is.EqualTo("https://host/api/page2"));
+    }
+
+    [Test]
     public async Task ReadAsync_WithTokenPagination_SendsTheTokenAndDropsTheOriginalQuery()
     {
         //Arrange
