@@ -94,6 +94,26 @@
     <RootNamespace>PenguinConverters.Syntra.$(MSBuildProjectName)</RootNamespace>
   </PropertyGroup>
 
+  <!--
+    A lock file records the exact graph a restore resolved, transitive packages included, so a
+    later restore reproduces it rather than re-resolving. Several references here float
+    (10.0.*, 1.*), which means without this the packages compiled into a release need not be the
+    ones anybody reviewed - a build a fortnight after the pull request can quietly differ.
+
+    Locked mode is applied on a build server only, where CI is set. It refuses to restore
+    anything the lock file does not already describe, so a package added without committing the
+    updated lock file fails the build instead of being resolved silently. A developer adding a
+    package locally is not obstructed; their restore updates the lock file, which is then part of
+    the change under review.
+
+    Database projects are excluded: Microsoft.Build.Sql resolves its own tooling, and pinning it
+    here would describe a graph that has nothing to do with the product.
+  -->
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition=" '$(CI)' == 'true' ">true</RestoreLockedMode>
+  </PropertyGroup>
+
   <!-- NuGet package metadata: every project in this repository is independently publishable. -->
   <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
