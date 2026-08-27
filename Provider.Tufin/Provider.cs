@@ -1,18 +1,22 @@
-using PenguinConverters.Syntra.Core.Entities;
-
 namespace PenguinConverters.Syntra.Provider.Tufin;
 
 /// <summary>
-/// Tufin source provider stub. Not yet implemented.
+/// Tufin source provider, reading devices, policies and rules from a Tufin appliance.
 /// </summary>
-public class Provider : Core.Source.Provider
+/// <remarks>
+/// Everything this connector does is configuration against <see cref="RESTful.Provider"/>: Basic
+/// authentication, the nested response path, and the parent-child endpoint walk that turns a
+/// device into its policies and a policy into its rules. Naming the configuration type is all
+/// that is left.
+/// </remarks>
+public class Provider : RESTful.Provider
 {
     #region Methods
 
     /// <inheritdoc />
-    public override IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default)
+    protected override RESTful.Source.Configuration? ReadConfiguration()
     {
-        throw new NotImplementedException("Tufin provider is not yet implemented.");
+        return DeserializeConfiguration<Source.Configuration>();
     }
 
     #endregion

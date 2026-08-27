@@ -187,6 +187,196 @@ public class ProviderBuilder : IProviderBuilder
 }
 ```
 
+## RESTful Provider (Inherited Source Connector)
+
+A connector for an HTTP JSON API does not need any of the steps above. `Provider.RESTful` is a
+complete connector — retrieval, paging, authentication, delta filtering, deletion marking and
+child endpoints are all implemented there and described by configuration. Point `Source.Type` at
+it directly, or derive from it when the API needs something configuration cannot state.
+
+### Using it without any code
+
+```yaml
+Source:
+  Type: PenguinConverters.Syntra.Provider.RESTful
+  Host: api.example.com
+  EndPoint: v2/assets
+  IdentityProperty: id
+  ResultPath: result            # where the collection sits in the response body
+  Authentication:
+    Mode: Basic
+    Username: { Value: svc_sync }
+    Password: { Value: <ciphertext>, Protected: true }
+  Pagination:
+    Mode: Token
+    TokenPath: next_page_id
+    TokenParameter: _page_id
+```
+
+### Configuration reference
+
+| Group | Settings |
+|---|---|
+| Address | `BaseUrl` or `Host`/`Scheme`/`Port`, `EndPoint`, `HttpMethod`, `Body`, `ContentType`, `Accept` |
+| Query | `Parameters`, `HttpHeaders` |
+| Projection | `PropertiesParameter`, `PropertiesFormat`, `PropertiesSeparator`, `PropertiesToLoad`, `PropertiesToIgnore` |
+| Response shape | `ResultPath`, `EntryPath`, `IdentityProperty` |
+| Paging | `Pagination.Mode` = `None`/`NextLink`/`Token`/`Offset`/`Page`, plus its paths and parameters |
+| Auth | `Authentication.Mode` = `None`/`Basic`/`ApiKey`/`Token`/`ClientCredentials`/`Session` |
+| Delta | `Delta`, `OffsetProperty`, `FilterParameter`, `FilterFormat`, `FilterCombineFormat`, `OffsetFormat` |
+| Deletion | `DeletedProperty`, `DeletedValue` |
+| Nesting | `Children[]`, `ParentIdentityProperty`, `InheritParentProperties`, `Properties` |
+| Transport | `RemoteCertificateValidation`, `Proxy`, `ReadRetryMaxCount`, `ReadRetryDelaySeconds`, `MaxDegreeOfParallelism`, timeouts |
+
+A path such as `ResultPath` or `Pagination.NextLinkPath` is dot-separated, and a numeric segment
+indexes an array — `_links.next.0.href`. A name that itself contains a dot, such as
+`@odata.nextLink`, is matched whole before the path is split.
+
+A child endpoint addresses its parent through a `<%property%>` placeholder:
+
+```yaml
+  EndPoint: devices
+  IdentityProperty: id
+  Children:
+    - EndPoint: devices/<%id%>/policies
+      ParentIdentityProperty: deviceId
+      InheritParentProperties: true
+```
+
+Child endpoints are read concurrently up to `MaxDegreeOfParallelism`, and the entities they
+produce are streamed through a bounded channel, so a slow consumer throttles the retrieval rather
+than the whole result set accumulating in memory.
+
+### Deriving a connector
+
+Set the API's defaults in a derived `Configuration` so the configuration file carries only what
+varies per installation, and name it from the provider:
+
+```csharp
+public class Configuration : RESTful.Source.Configuration
+{
+    public Configuration()
+    {
+        ResultPath = "entries";
+        EntryPath = "values";
+        Pagination = new PaginationSettings { Mode = PaginationMode.NextLink, NextLinkPath = "_links.next.0.href" };
+    }
+}
+
+public class Provider : RESTful.Provider
+{
+    protected override RESTful.Source.Configuration? ReadConfiguration()
+        => DeserializeConfiguration<Configuration>();
+}
+
+public class ProviderBuilder : RESTful.ProviderBuilder
+{
+    protected override RESTful.Provider CreateProvider() => new Provider();
+}
+```
+
+**Restore nested defaults after deserialization.** A deserializer fills a fresh object rather
+than merging into one, so a configuration file that mentions `Authentication` at all replaces the
+whole section — silently discarding the `Mode` the constructor set, and sending anonymous
+requests. Override `ApplyDefaults()`, which the provider calls once after deserialization, and
+fill in only what is still unset:
+
+```csharp
+public Configuration() => ApplyCmdbDefaults();
+
+public override void ApplyDefaults()
+{
+    base.ApplyDefaults();
+    ApplyCmdbDefaults();
+}
+
+private void ApplyCmdbDefaults()
+{
+    ResultPath ??= DefaultResultPath;
+
+    Authentication ??= new AuthenticationSettings();
+
+    if (Authentication.Mode == AuthenticationMode.None)
+        Authentication.Mode = AuthenticationMode.Session;
+
+    Authentication.TokenEndPoint ??= DefaultLoginEndPoint;
+}
+```
+
+Scalar properties do not need this — a deserializer leaves a property the file does not mention
+at its constructed value. Only nested sections (`Authentication`, `Pagination`, `Proxy`) are
+replaced wholesale.
+
+### Expanding one row into many records
+
+`ContentReader` is a stream-to-records delegate, so it is also where a one-row-to-many-records
+expansion belongs — `EntryTransform` maps one record to zero or one and cannot express it.
+`Provider.Tenable` uses this for Nessus scan exports, where a single row's plugin output lists
+every cipher suite, certificate, SSH algorithm or SSH version a host offers:
+
+```yaml
+Source:
+  Type: PenguinConverters.Syntra.Provider.Tenable
+  Host: tenable.example.com
+  EndPoint: rest/report/<%ReportId(Weekly Scan)%>/download
+  Plugin: Nessus          # None stores the row as it stands
+  IdentityProperty: MD5HashCode
+```
+
+The delegate is composable rather than baked in:
+
+```csharp
+// Use the built-in expansion from a host.
+provider.ContentReader = NessusContentReader.Create(configuration, logger);
+
+// Or expand rows some other way; nothing else about the connector changes.
+provider.ContentReader = (stream, configuration, token) => MyReader.ReadAsync(stream, token);
+```
+
+An assigned `ContentReader` always wins over the configured `Plugin`.
+
+### The six connectors built on it
+
+| Connector | What it is |
+|---|---|
+| `Provider.CMDB` | Configuration + one value handler coercing the modification timestamp |
+| `Provider.Tufin` | Configuration only — Basic auth, nested `ResultPath`, device → policy → rule walk |
+| `Provider.Infoblox` | Configuration only — WAPI envelope, `_return_fields`, `_page_id` token paging |
+| `Provider.Ciphersuite` | Configuration + an entry transform unwrapping the IANA-name-keyed record |
+| `Provider.Tenable` | Configuration + a delimited content reader, a report-identifier resolver, and the Nessus expansion |
+| `Provider.RESTful` | Usable directly, with no subclass at all |
+
+### Customization seams
+
+Never override `RetrieveAsync`. Each seam is a `protected virtual` method whose default
+implementation invokes an optional delegate, so a derived connector overrides the method and a
+host wiring one up assigns the delegate:
+
+| Seam | Method | Delegate |
+|---|---|---|
+| Coerce one property's type | `ResolveValue` | `ValueHandlers["Modified Date"]`, `AddValueHandler(...)` |
+| Coerce every property | `ResolveValue` | `ValueHandler` |
+| Reshape or drop a record | `TransformEntry` | `EntryTransform` (return `null` to drop) |
+| Decide the state | `ResolveState` | `StateSelector` |
+| Decide the identity | `ResolveIdentity` | `IdentitySelector` |
+| Read a non-JSON body | `ReadContent`, `ReadsContent` | `ContentReader` |
+| Resolve an endpoint at run time | `ResolveEndPointAsync` | `EndPointResolver` |
+
+On the builder: `CreateProvider`, `CreateAuthenticationProvider` (or the `AuthenticationFactory`
+delegate), `CreateTransport`, `CreateRequestOptions`, `ConfigureProvider`.
+
+```csharp
+// Per-property type handling, registered from the derived provider's constructor.
+AddValueHandler("Modified Date", value => value is string text
+    ? DateTime.Parse(text, CultureInfo.InvariantCulture)
+    : value);
+```
+
+Authentication beyond the built-in modes returns any Kiota `IAuthenticationProvider`; the same
+request pipeline applies it. The pipeline itself is Kiota's — retry honouring `Retry-After`,
+redirect, and parameter-name decoding that restores the `$` of an OData system query option —
+so no connector deriving from this one writes a retry loop.
+
 ## Consumer (Destination Connector)
 
 A Consumer writes entities to a target system.
