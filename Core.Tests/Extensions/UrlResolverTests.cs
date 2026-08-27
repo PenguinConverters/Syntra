@@ -1,6 +1,6 @@
-using PenguinConverters.Syntra.Provider.RESTful.Source;
+using PenguinConverters.Syntra.Core.Extensions;
 
-namespace PenguinConverters.Syntra.Provider.RESTful.Tests.Source;
+namespace PenguinConverters.Syntra.Core.Tests.Extensions;
 
 [TestFixture]
 public class UrlResolverTests
