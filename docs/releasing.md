@@ -79,18 +79,31 @@ server.
 
 ## How connectors reach the host
 
-Every connector is a project reference of both hosts. That is what puts it in the application's
-`deps.json`, and `deps.json` is what `Assembly.Load` reads - the default load context does **not**
-probe the application directory, so a connector merely sitting beside the executable is invisible
-to it.
+A connector can be deployed two ways, and both work.
 
-The reference decides what is *deployed*. It does not decide what is *used*: `InstanceBuilder`
-still resolves a connector by name from configuration at run time, so a deployment enables only the
-connectors its configuration names.
+**Referenced.** Every connector that ships in the box is a project reference of both hosts, which
+puts it in the application's `deps.json` and lets the default load context resolve it.
 
-The trade is that adding a connector now means adding a reference to `Host.Console` and
-`Host.Service`, and that a connector which fails to build fails the host build with it. That is the
-cost of a host that can actually load what it ships.
+**Dropped in as a file.** Put the assembly in `connectors/` beside the host, or beside the host
+itself, and it is found by name. This is how a connector built after the host was released - or one
+built by somebody else - is deployed without rebuilding anything.
+
+The file path exists because .NET does not probe the application directory. The .NET Framework
+loader did, which is why dropping an assembly next to the host used to be all that was required;
+`InstanceBuilder` now performs that probe itself.
+
+A file is only loaded if it carries the **same strong name as `Core`**. The identity is read from
+the file's manifest before anything is loaded, so an assembly signed with another key never enters
+the process. `WithPublicKey` replaces that expectation when a deployment trusts a different key.
+
+> A strong name is an identity, not a proof of authorship: .NET does not verify strong-name
+> signatures when it loads an assembly, so this establishes *which* assembly claims to be which,
+> not *who* produced it. Authorship is what Authenticode establishes, and that is verified when a
+> release is signed rather than when a connector is loaded.
+
+Either way the reference decides only what is *deployed*. `InstanceBuilder` still resolves a
+connector by name from configuration, so a deployment enables only the connectors its configuration
+names.
 
 ## Who can release
 
