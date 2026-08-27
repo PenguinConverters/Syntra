@@ -19,9 +19,25 @@
     <Authors>Syntra Team</Authors>
     <Product>Syntra</Product>
     <Copyright>Copyright (c) 2026 Penguin Converters AG</Copyright>
-    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <!--
+    Versioning has one source of truth: the release tag. CI passes -p:Version=<tag>, which is a
+    global property and therefore wins over the fallback below - the fallback exists so that a
+    local build produces something sane, never so that a release reads its version from a file
+    somebody forgot to bump.
+
+    AssemblyVersion is pinned and does not move with the release. It is the identity half of a
+    strong name, so changing it per release would break every binding against these assemblies
+    and defeat the point of signing them. It moves only on a deliberate major version.
+    FileVersion and InformationalVersion carry the real number, which is what a support call
+    reads off the file properties dialog; the SDK appends the commit to InformationalVersion.
+  -->
+  <PropertyGroup>
+    <Version>1.0.0.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
   </PropertyGroup>
 
   <!--

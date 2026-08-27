@@ -1,0 +1,300 @@
+name: Release
+
+# -----------------------------------------------------------------------------
+# Produces a DRAFT release. Nothing here publishes anything to the world: the
+# draft carries unsigned artifacts, and the on-prem signing job replaces them and
+# promotes the draft once an authorized approver has verified their provenance.
+#
+# The version comes from the tag and from nowhere else. Directory.Build.props
+# carries a fallback so a local build produces something sane, but a release
+# never reads its version out of a file somebody forgot to bump.
+# -----------------------------------------------------------------------------
+
+on:
+  push:
+    tags: ["*.*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stage, e.g. 1.0.0.26. Produces a draft without creating a tag."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# A release must never be cancelled half-way by a second push landing on top of
+# it, so this concurrency group does not cancel in progress.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Everything that can make a release collide with an existing one is decided
+  # here, before a single project is built.
+  # ---------------------------------------------------------------------------
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      commit: ${{ steps.resolve.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAW: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          version="${RAW#v}"
+
+          # MAJOR.MINOR.PATCH.BUILD, matching the version carried in commit
+          # subjects. Anything else is a typo, and a typo that reaches the
+          # signing runner has wasted an approver's time.
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$RAW' is not MAJOR.MINOR.PATCH.BUILD, for example 1.0.0.26."
+            exit 1
+          fi
+
+          # A Windows file version resource holds four 16-bit fields. A larger
+          # number builds happily and then truncates silently in the binary.
+          IFS=. read -r a b c d <<< "$version"
+          for field in "$a" "$b" "$c" "$d"; do
+            if (( field > 65535 )); then
+              echo "::error::'$version' has a field above 65535, which a Windows file version cannot hold."
+              exit 1
+            fi
+          done
+
+          commit="$(git rev-parse HEAD)"
+
+          # A release carries the company signature, so it comes from reviewed
+          # history. A tag on a side branch is refused here rather than being
+          # discovered after the artifacts are built.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            git fetch --no-tags --depth=0 origin main
+            if ! git merge-base --is-ancestor "$commit" origin/main; then
+              echo "::error::Tag '$RAW' points at $commit, which is not contained in main."
+              exit 1
+            fi
+          fi
+
+          # A published release is immutable as far as this workflow is
+          # concerned: replacing its assets would change the bytes behind a name
+          # somebody may already have downloaded.
+          if existing="$(gh release view "$version" --json isDraft,url 2>/dev/null)"; then
+            if [ "$(jq -r .isDraft <<< "$existing")" = "false" ]; then
+              echo "::error::$version is already published at $(jq -r .url <<< "$existing"). Cut a new version instead."
+              exit 1
+            fi
+            echo "::notice::A draft for $version exists; its assets will be replaced."
+          fi
+
+          # Going backwards is legal but almost always a mistake, so it warns
+          # rather than blocks - a genuine re-release of an older line should not
+          # need a workflow change to get through.
+          latest="$(gh release list --limit 100 --json tagName,isDraft \
+            --jq '[.[] | select(.isDraft == false) | .tagName] | first // empty' 2>/dev/null || true)"
+          if [ -n "$latest" ] && [ "$latest" != "$version" ]; then
+            highest="$(printf '%s\n%s\n' "$latest" "$version" | sort -V | tail -1)"
+            if [ "$highest" != "$version" ]; then
+              echo "::warning::$version is lower than the latest published release $latest."
+            fi
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "::notice::Staging $version from $commit."
+
+  # ---------------------------------------------------------------------------
+  # The pull request build does not run on a tag push, so a release tests itself
+  # rather than trusting that main was green when it was tagged.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Build solution
+        run: dotnet build Syntra.CI.slnf -c Release --nologo -p:Version=${{ needs.version.outputs.version }}
+
+      - name: Run tests
+        run: >-
+          dotnet test Syntra.CI.slnf -c Release --nologo --no-build
+          -p:Version=${{ needs.version.outputs.version }}
+          --logger "trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-test-results-${{ matrix.os }}
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Self-contained, so a target server needs no .NET runtime installed. Neither
+  # single-file nor trimmed: connectors are resolved by assembly name at runtime,
+  # and both of those transformations break reflection-based loading.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish (${{ matrix.rid }})
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        rid: [win-x64, linux-x64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Publish hosts and connectors
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+
+          publish_app () {
+            local project="$1" label="$2" out="stage/$label"
+
+            dotnet publish "$project/$project.csproj" \
+              -c Release -r "$RID" --self-contained true \
+              -p:Version="$VERSION" \
+              -p:PublishSingleFile=false -p:PublishTrimmed=false \
+              -o "$out" --nologo
+
+            # The hosts reference only Core; every connector is loaded by name at
+            # runtime, so nothing pulls them into the publish output. They are
+            # published into the same folder deliberately, which is where any
+            # resolver fix will look for them.
+            while IFS= read -r connector; do
+              dotnet publish "$connector" -c Release -p:Version="$VERSION" -o "$out" --nologo
+            done < <(find Provider.* Consumer.* -maxdepth 1 -name '*.csproj' ! -name '*.Tests.csproj' | sort)
+          }
+
+          publish_app Host.Console console
+          publish_app Host.Service service
+
+      - name: Archive
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RID: ${{ matrix.rid }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          for label in console service; do
+            name="syntra-$label-$VERSION-$RID"
+            if [[ "$RID" == win-* ]]; then
+              (cd "stage/$label" && zip -qr "../../dist/$name.zip" .)
+            else
+              tar -czf "dist/$name.tar.gz" -C "stage/$label" .
+            fi
+          done
+
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-assets-${{ matrix.rid }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # The only job that writes. It creates the draft if there is not one, replaces
+  # its assets if there is, and leaves it a draft either way.
+  # ---------------------------------------------------------------------------
+  draft:
+    name: Stage draft release
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-assets-*
+          path: incoming
+          merge-multiple: true
+
+      - name: Checksum
+        run: |
+          set -euo pipefail
+          cd incoming
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create or update the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          COMMIT: ${{ needs.version.outputs.commit }}
+        run: |
+          set -euo pipefail
+
+          cat > notes.md <<EOF
+          Staged from \`$COMMIT\`.
+
+          **These artifacts are unsigned.** They are replaced by signed copies on the
+          on-prem runner, which verifies their provenance first. This draft is not a
+          release until an approver from the release group promotes it.
+
+          Verify a download against \`SHA256SUMS.txt\` before use.
+          EOF
+
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release edit "$VERSION" --draft --title "$VERSION" --notes-file notes.md
+          else
+            gh release create "$VERSION" --draft --title "$VERSION" --notes-file notes.md --target "$COMMIT"
+          fi
+
+          # --clobber so a re-run after a failed upload replaces assets instead of
+          # erroring or leaving two copies behind.
+          gh release upload "$VERSION" incoming/* --clobber
+
+          echo "::notice::Draft $VERSION staged with $(ls incoming | wc -l) asset(s)."
