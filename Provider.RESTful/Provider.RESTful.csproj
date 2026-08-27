@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>PenguinConverters.Syntra.Provider.RESTful</RootNamespace>
+    <AssemblyName>PenguinConverters.Syntra.Provider.RESTful</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>Syntra Team</Authors>
+    <Company>Penguin Converters AG</Company>
+    <Product>Syntra</Product>
+    <Description>Generic RESTful API source connector. Inherit it to build a connector for a specific API, or point a configuration straight at it.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Endpoints are configuration strings, not compile-time paths, so a generated Kiota client
+      is of no use here. What is of use is the middleware pipeline it is built on:
+      KiotaClientFactory chains retry - which honours Retry-After - redirect, parameter-name
+      decoding and user agent handlers around a plain HttpClient. Every connector deriving from
+      this one inherits that instead of reimplementing a retry loop.
+    -->
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Kiota.Http.HttpClientLibrary" Version="2.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+  </ItemGroup>
+
+</Project>

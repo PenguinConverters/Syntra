@@ -1,62 +1,22 @@
-using Microsoft.Extensions.Logging;
-using PenguinConverters.Keyra;
-using PenguinConverters.Syntra.Core.Source;
-
 namespace PenguinConverters.Syntra.Provider.CMDB;
 
 /// <summary>
-/// Builds a CMDB <see cref="IProvider"/> instance with HTTP REST client
-/// configuration, credentials, and DateTime offset state.
+/// Builds a CMDB <see cref="Provider"/>.
 /// </summary>
-public class ProviderBuilder : IProviderBuilder
+/// <remarks>
+/// The credentials, the transport and the middleware pipeline are assembled by
+/// <see cref="RESTful.ProviderBuilder"/> from what <see cref="Source.Configuration"/> declares -
+/// including the JWT session, which the base builder establishes and releases. Naming the
+/// provider type is all this builder adds.
+/// </remarks>
+public class ProviderBuilder : RESTful.ProviderBuilder
 {
-    #region Fields
-
-    private readonly Provider _provider = new();
-    private Func<byte[], Type, object>? _deserializer;
-    private Decryptor? _decryptor;
-    private ILogger? _logger;
-    private byte[]? _configuration;
-    private byte[]? _metadata;
-
-    #endregion
-
     #region Methods
 
     /// <inheritdoc />
-    public void AddConfiguration(byte[] configuration) => _configuration = configuration;
-
-    /// <inheritdoc />
-    public void AddMetadata(byte[]? metadata) => _metadata = metadata;
-
-    /// <inheritdoc />
-    public void AddDeserializer(Func<byte[], Type, object> deserializer) => _deserializer = deserializer;
-
-    /// <inheritdoc />
-    public void AddLogger(ILogger logger) => _logger = logger;
-
-    /// <inheritdoc />
-    public void AddDecryptor(Decryptor decryptor) => _decryptor = decryptor;
-
-    /// <inheritdoc />
-    public IProvider Build()
+    protected override RESTful.Provider CreateProvider()
     {
-        if (_deserializer is not null) _provider.SetDeserializer(_deserializer);
-        if (_decryptor is not null) _provider.SetDecryptor(_decryptor);
-        if (_logger is not null) _provider.SetLogger(_logger);
-
-        if (_configuration is not null)
-        {
-            _provider.SetConfiguration(_configuration);
-            _provider.DeserializeAndApplyConfiguration();
-        }
-
-        if (_metadata is not null)
-            _provider.SetMetadata(_metadata);
-
-        _provider.InitializeOffset();
-
-        return _provider;
+        return new Provider();
     }
 
     #endregion

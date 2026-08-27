@@ -17,15 +17,22 @@
       "Provider.ActiveDirectory/Provider.ActiveDirectory.csproj",
       "Provider.AzureResources/Provider.AzureResources.csproj",
       "Provider.AzureSQL/Provider.AzureSQL.csproj",
+      "Provider.Ciphersuite.Tests/Provider.Ciphersuite.Tests.csproj",
       "Provider.Ciphersuite/Provider.Ciphersuite.csproj",
+      "Provider.CMDB.Tests/Provider.CMDB.Tests.csproj",
       "Provider.CMDB/Provider.CMDB.csproj",
       "Provider.DevOps/Provider.DevOps.csproj",
       "Provider.EntraID/Provider.EntraID.csproj",
       "Provider.Exchange/Provider.Exchange.csproj",
+      "Provider.Infoblox.Tests/Provider.Infoblox.Tests.csproj",
       "Provider.Infoblox/Provider.Infoblox.csproj",
       "Provider.Oracle/Provider.Oracle.csproj",
+      "Provider.RESTful.Tests/Provider.RESTful.Tests.csproj",
+      "Provider.RESTful/Provider.RESTful.csproj",
       "Provider.ServiceNow/Provider.ServiceNow.csproj",
+      "Provider.Tenable.Tests/Provider.Tenable.Tests.csproj",
       "Provider.Tenable/Provider.Tenable.csproj",
+      "Provider.Tufin.Tests/Provider.Tufin.Tests.csproj",
       "Provider.Tufin/Provider.Tufin.csproj"
     ]
   }

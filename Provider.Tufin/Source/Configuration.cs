@@ -1,36 +1,72 @@
-using PenguinConverters.Keyra.Settings;
-using PenguinConverters.Syntra.Core.Settings;
+using PenguinConverters.Syntra.Provider.RESTful.Source;
 
 namespace PenguinConverters.Syntra.Provider.Tufin.Source;
 
 /// <summary>
-/// Configuration settings for the Tufin source provider.
+/// Configuration for the Tufin source provider.
 /// </summary>
-public class Configuration
+/// <remarks>
+/// Tufin answers with a JSON object that nests its collection two levels deep under names that
+/// vary per endpoint - <c>devices.device</c>, <c>policies.policy</c>, <c>rules.rule</c> - so
+/// <see cref="RESTful.Source.Configuration.ResultPath"/> is set per endpoint rather than defaulted
+/// here.
+/// <para>
+/// Most of what a Tufin read needs is nesting: a device is only the key to its policies, and a
+/// policy only the key to its rules. That is
+/// <see cref="RESTful.Source.Configuration.Children"/>, addressed through
+/// <c>&lt;%property%&gt;</c> placeholders, and needs no code.
+/// </para>
+/// </remarks>
+public class Configuration : RESTful.Source.Configuration
 {
-    #region Properties
+    #region Constants
 
     /// <summary>
-    /// Gets or sets the Tufin server hostname.
+    /// Property holding the identity of a Tufin object.
     /// </summary>
-    public string? Host { get; set; }
+    public const string DefaultIdentityProperty = "id";
+
+    #endregion
+
+    #region Constructors
 
     /// <summary>
-    /// Gets or sets the REST API endpoint path.
+    /// Initializes a new instance of the <see cref="Configuration"/> class with the defaults a
+    /// Tufin appliance needs. Every one of them may be overridden by the configuration file.
     /// </summary>
-    public string? Endpoint { get; set; }
+    public Configuration()
+    {
+        ApplyTufinDefaults();
+    }
+
+    #endregion
+
+    #region Methods
+
+    /// <inheritdoc />
+    public override void ApplyDefaults()
+    {
+        base.ApplyDefaults();
+
+        ApplyTufinDefaults();
+    }
 
     /// <summary>
-    /// Gets or sets the username credential.
-    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
+    /// Fills in whatever the configuration file left unset. Every assignment is conditional, so
+    /// running this after deserialization restores the defaults a mentioned section discarded
+    /// without overwriting anything the file actually stated.
     /// </summary>
-    public Secret? Username { get; set; }
+    private void ApplyTufinDefaults()
+    {
+        IdentityProperty ??= DefaultIdentityProperty;
 
-    /// <summary>
-    /// Gets or sets the password credential.
-    /// Uses <see cref="Secret"/> for optional Keyra encryption support.
-    /// </summary>
-    public Secret? Password { get; set; }
+        Authentication ??= new AuthenticationSettings();
+
+        if (Authentication.Mode == AuthenticationMode.None)
+        {
+            Authentication.Mode = AuthenticationMode.Basic;
+        }
+    }
 
     #endregion
 }

@@ -1,92 +1,73 @@
-using System.Runtime.CompilerServices;
-using System.Text;
-using Microsoft.Extensions.Logging;
-using PenguinConverters.Keyra.Settings;
-using PenguinConverters.Syntra.Core.Entities;
+using System.Globalization;
 using PenguinConverters.Syntra.Provider.CMDB.Source;
 
 namespace PenguinConverters.Syntra.Provider.CMDB;
 
 /// <summary>
-/// CMDB source provider that retrieves entities from a Configuration Management Database
-/// via HTTP REST API. Supports delta synchronization using a DateTime offset.
+/// CMDB source provider, reading records from the CMDB REST API.
 /// </summary>
-public class Provider : Core.Source.Provider
+/// <remarks>
+/// Retrieval, paging, the JWT session, delta filtering and deletion marking all come from
+/// <see cref="RESTful.Provider"/> and are described by <see cref="Configuration"/>. What is left
+/// here is the one thing configuration cannot state: the API returns its timestamps as strings,
+/// and a value handler turns them into the type a consumer should store.
+/// </remarks>
+public class Provider : RESTful.Provider
 {
-    #region Fields
+    #region Constants
 
-    private Configuration? _configuration;
-    private DateTime? _lastModified;
+    /// <summary>
+    /// Format the API renders a timestamp in.
+    /// </summary>
+    public const string TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
     #endregion
 
-    #region Properties
+    #region Constructors
 
     /// <summary>
-    /// Gets or sets the provider configuration.
+    /// Initializes a new instance of the <see cref="Provider"/> class.
     /// </summary>
-    internal Configuration? Configuration
+    public Provider()
     {
-        get => _configuration;
-        set => _configuration = value;
+        // The watermark property arrives as a quoted string. Coercing it here rather than at the
+        // consumer means the delta watermark and the stored column agree on what the value is,
+        // and a record whose timestamp the API renders oddly is left as text rather than dropped.
+        AddValueHandler(Source.Configuration.DefaultOffsetProperty, ReadTimestamp);
     }
 
     #endregion
 
     #region Methods
 
-    /// <summary>
-    /// Deserializes the raw configuration bytes and applies them to this provider.
-    /// </summary>
-    internal void DeserializeAndApplyConfiguration()
-    {
-        _configuration = DeserializeConfiguration<Configuration>()
-            ?? throw new InvalidOperationException("Failed to deserialize CMDB provider configuration.");
-    }
-
-    /// <summary>
-    /// Initializes the last modified offset from the raw metadata bytes.
-    /// </summary>
-    internal void InitializeOffset()
-    {
-        if (RawMetadata is not null)
-        {
-            string offsetStr = Encoding.UTF8.GetString(RawMetadata);
-            if (DateTime.TryParse(offsetStr, out DateTime offset))
-                _lastModified = offset;
-        }
-    }
-
     /// <inheritdoc />
-    public override async IAsyncEnumerable<IEntity> RetrieveAsync(
-        IEnumerable<string> properties,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    protected override RESTful.Source.Configuration? ReadConfiguration()
     {
-        if (_configuration is null)
+        return DeserializeConfiguration<Configuration>();
+    }
+
+    /// <summary>
+    /// Reads a timestamp the API rendered as a string.
+    /// </summary>
+    /// <param name="value">The value as the response carried it.</param>
+    /// <returns>
+    /// The timestamp in UTC, or the value unchanged when it is not one the API's format describes.
+    /// </returns>
+    private static object? ReadTimestamp(object? value)
+    {
+        if (value is not string text || string.IsNullOrWhiteSpace(text))
         {
-            Logger.LogError("CMDB provider configuration is not set.");
-            yield break;
+            return value;
         }
 
-        Logger.LogInformation(
-            "Starting {SyncType} retrieval from '{Host}{Endpoint}'.",
-            _lastModified.HasValue ? "delta" : "full",
-            _configuration.Host,
-            _configuration.Endpoint);
-
-        // 1. Authenticate via Basic Auth using Username/Password (Secret)
-        // 2. Build request URL: https://{Host}{Endpoint}?{Parameters}
-        //    Delta: append modified date filter parameter
-        // 3. Page through REST API results
-        // 4. Create Entity objects per result record
-        // 5. Track maximum modification timestamp for metadata
-
-        // Placeholder for the awaited REST API page request that yields entities.
-        await Task.CompletedTask.ConfigureAwait(false);
-
-        // On success: RawMetadata = Encoding.UTF8.GetBytes(maxModified.ToString("O"));
-
-        Logger.LogInformation("CMDB retrieval completed.");
+        return DateTime.TryParseExact(
+            text,
+            TimestampFormat,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+            out DateTime timestamp)
+            ? timestamp
+            : value;
     }
 
     #endregion

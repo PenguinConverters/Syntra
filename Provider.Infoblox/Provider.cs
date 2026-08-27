@@ -1,18 +1,21 @@
-using PenguinConverters.Syntra.Core.Entities;
-
 namespace PenguinConverters.Syntra.Provider.Infoblox;
 
 /// <summary>
-/// Infoblox source provider stub. Not yet implemented.
+/// Infoblox source provider, reading DNS, DHCP and IPAM records from a Grid Master over the WAPI.
 /// </summary>
-public class Provider : Core.Source.Provider
+/// <remarks>
+/// Everything this connector does is configuration against <see cref="RESTful.Provider"/>: Basic
+/// authentication, the response envelope, the field projection and the continuation-token paging
+/// the WAPI uses. Naming the configuration type is all that is left.
+/// </remarks>
+public class Provider : RESTful.Provider
 {
     #region Methods
 
     /// <inheritdoc />
-    public override IAsyncEnumerable<IEntity> RetrieveAsync(IEnumerable<string> properties, CancellationToken cancellationToken = default)
+    protected override RESTful.Source.Configuration? ReadConfiguration()
     {
-        throw new NotImplementedException("Infoblox provider is not yet implemented.");
+        return DeserializeConfiguration<Source.Configuration>();
     }
 
     #endregion

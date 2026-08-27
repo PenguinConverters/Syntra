@@ -18,14 +18,21 @@
   <Project Path="Provider.ActiveDirectory/Provider.ActiveDirectory.csproj" />
   <Project Path="Provider.AzureResources/Provider.AzureResources.csproj" />
   <Project Path="Provider.AzureSQL/Provider.AzureSQL.csproj" />
+  <Project Path="Provider.Ciphersuite.Tests/Provider.Ciphersuite.Tests.csproj" />
   <Project Path="Provider.Ciphersuite/Provider.Ciphersuite.csproj" />
+  <Project Path="Provider.CMDB.Tests/Provider.CMDB.Tests.csproj" />
   <Project Path="Provider.CMDB/Provider.CMDB.csproj" />
   <Project Path="Provider.DevOps/Provider.DevOps.csproj" />
   <Project Path="Provider.EntraID/Provider.EntraID.csproj" />
   <Project Path="Provider.Exchange/Provider.Exchange.csproj" />
+  <Project Path="Provider.Infoblox.Tests/Provider.Infoblox.Tests.csproj" />
   <Project Path="Provider.Infoblox/Provider.Infoblox.csproj" />
   <Project Path="Provider.Oracle/Provider.Oracle.csproj" />
+  <Project Path="Provider.RESTful.Tests/Provider.RESTful.Tests.csproj" />
+  <Project Path="Provider.RESTful/Provider.RESTful.csproj" />
   <Project Path="Provider.ServiceNow/Provider.ServiceNow.csproj" />
+  <Project Path="Provider.Tenable.Tests/Provider.Tenable.Tests.csproj" />
   <Project Path="Provider.Tenable/Provider.Tenable.csproj" />
+  <Project Path="Provider.Tufin.Tests/Provider.Tufin.Tests.csproj" />
   <Project Path="Provider.Tufin/Provider.Tufin.csproj" />
 </Solution>
