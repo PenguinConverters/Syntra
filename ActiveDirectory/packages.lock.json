@@ -58,6 +58,32 @@
           "YamlDotNet": "[18.1.0, )"
         }
       }
+    },
+    "net10.0/linux-x64": {
+      "System.DirectoryServices.Protocols": {
+        "type": "Direct",
+        "requested": "[10.0.*, )",
+        "resolved": "10.0.11",
+        "contentHash": "Q4DEPB0wfAMAM6zjCjioFQoDZGC6uCeAZMU30sdjMgVtKbSuSBjhASVlxVOTYmQKCdUqZInnDwZ3W/ZTWB4m3Q=="
+      },
+      "PenguinConverters.CandyStore": {
+        "type": "Transitive",
+        "resolved": "2.19.0",
+        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+      }
+    },
+    "net10.0/win-x64": {
+      "System.DirectoryServices.Protocols": {
+        "type": "Direct",
+        "requested": "[10.0.*, )",
+        "resolved": "10.0.11",
+        "contentHash": "Q4DEPB0wfAMAM6zjCjioFQoDZGC6uCeAZMU30sdjMgVtKbSuSBjhASVlxVOTYmQKCdUqZInnDwZ3W/ZTWB4m3Q=="
+      },
+      "PenguinConverters.CandyStore": {
+        "type": "Transitive",
+        "resolved": "2.19.0",
+        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+      }
     }
   }
 }

@@ -112,6 +112,18 @@
   <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreLockedMode Condition=" '$(CI)' == 'true' ">true</RestoreLockedMode>
+
+    <!--
+      The runtimes a release is published for are declared so that the lock file records them.
+      A restore for a runtime the lock file does not describe is a changed graph as far as locked
+      mode is concerned, so publishing for win-x64 against a lock file written without it fails
+      with NU1004 - which is every release build, since a release publishes per runtime.
+
+      This is plural on purpose. It states which runtimes may be asked for; it does not make any
+      build produce runtime-specific output. Adding a runtime here means regenerating the lock
+      files with a forced evaluation, and that regeneration is part of the change.
+    -->
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
   <!-- NuGet package metadata: every project in this repository is independently publishable. -->
