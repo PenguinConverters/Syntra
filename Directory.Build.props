@@ -150,6 +150,32 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!--
+    Debug symbols are for the person debugging, and that person is never a customer.
+
+    Debug builds carry full symbols, so a breakpoint lands where it should and an exception
+    names a line. Release builds carry none: a .pdb maps compiled code back to source lines,
+    local names and the paths of the machine that built it, and there is no reason for any of
+    that to reach a server we do not own. It is also the largest single thing an attacker
+    would want out of a shipped archive.
+
+    The cost is real and accepted: a stack trace from a Release build gives method names but
+    no line numbers. The trade is that the release pipeline strips these from the archives in
+    any case, so producing them only to delete them served nobody.
+
+    Database projects are excluded, as everywhere else in this file: Microsoft.Build.Sql
+    produces a .dacpac and does not read these.
+  -->
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' And '$(Configuration)' == 'Debug' ">
+    <DebugType>Full</DebugType>
+    <DebugSymbols>True</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' And '$(Configuration)' == 'Release' ">
+    <DebugType>None</DebugType>
+    <DebugSymbols>False</DebugSymbols>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(IsPackable)' != 'false' And Exists('$(MSBuildThisFileDirectory)README.md')">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
