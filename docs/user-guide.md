@@ -33,17 +33,17 @@ Syntra is an IAM (Identity & Access Management) and Automation framework by Peng
 
 ```bash
 # Full sync
-dotnet PenguinConverters.Syntra.Host.Console.dll --configuration=config.yaml
+CMDSYNTRA --configuration=config.yaml
 
 # Schema discovery mode (output SQL schema without writing)
-dotnet PenguinConverters.Syntra.Host.Console.dll --configuration=config.yaml --schema
+CMDSYNTRA --configuration=config.yaml --schema
 ```
 
 ### Windows Service
 
 ```bash
 # Install as Windows Service
-sc create Syntra binpath="C:\Syntra\PenguinConverters.Syntra.Host.Service.exe"
+sc create Syntra binpath="C:\Syntra\svcsyntra.exe"
 sc start Syntra
 ```
 
@@ -57,7 +57,7 @@ Description=Syntra Synchronization Service
 
 [Service]
 Type=notify
-ExecStart=/opt/syntra/PenguinConverters.Syntra.Host.Service
+ExecStart=/opt/syntra/svcsyntra
 
 [Install]
 WantedBy=multi-user.target
@@ -186,7 +186,7 @@ GET api/ADUser?@syntra.metadata=count
 The Schema Designer analyzes source data to infer SQL table schemas:
 
 ```bash
-dotnet PenguinConverters.Syntra.Host.Console.dll --configuration=config.yaml --schema
+CMDSYNTRA --configuration=config.yaml --schema
 ```
 
 Output includes:

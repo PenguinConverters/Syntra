@@ -303,7 +303,16 @@ Do not "fix" this by lengthening folder names. The tier prefix (`Provider.`, `Co
 `Host.`) sorts related projects together in a flat solution, which is what replaces a folder
 tree. Database projects additionally set `SqlTargetName` so the `.dacpac` keeps the full name.
 
-`Host.Console` is the one deliberate exception: it ships as `CMDSYNTRA.exe`.
+The hosts are the deliberate exceptions. An executable's assembly name is what an operator
+types or writes into a service definition, so it is short:
+
+| Project | Ships as |
+|---------|----------|
+| `Host.Console` | `CMDSYNTRA.exe` |
+| `Host.Service` | `svcsyntra.exe` |
+
+Only an executable may do this. `Directory.Build.targets` fails the build of any library whose
+assembly name does not begin with `PenguinConverters.Syntra.` (`SYNTRA0001`).
 
 ## 4. API Naming Conventions
 

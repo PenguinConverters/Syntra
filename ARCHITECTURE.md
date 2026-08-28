@@ -153,7 +153,7 @@ Syntra's synchronization engine is **host agnostic**:
 - Args: `--configuration={file.yaml} [--schema]`
 - `--schema` enables SchemaDesigner mode (output-only, no database writes)
 
-### 2. Windows Service / Linux Daemon (`PenguinConverters.Syntra.Host.Service`)
+### 2. Windows Service / Linux Daemon (`svcsyntra`)
 - Long-running background service
 - Cron-based scheduling via NCrontab
 - Loads multiple configurations from `Configuration/` directory
@@ -271,8 +271,8 @@ Each component is an independent Solution that can be published as a NuGet packa
 | PenguinConverters.Syntra.Core | Library | Core interfaces, entities, configuration, builders |
 | PenguinConverters.Syntra.ActiveDirectory | Library | LDAP operations library |
 | PenguinConverters.Syntra.Api | Web API | REST API with OData/OpenAPI |
-| PenguinConverters.Syntra.Host.Console | Console App | CLI synchronization runner |
-| PenguinConverters.Syntra.Host.Service | Worker Service | Background service with scheduling |
+| CMDSYNTRA | Console App | CLI synchronization runner |
+| svcsyntra | Worker Service | Background service with scheduling |
 | PenguinConverters.Syntra.Provider.* | Library | Source connectors (one per system) |
 | PenguinConverters.Syntra.Consumer.* | Library | Destination connectors |
 | Consumer.AzureSQL.Database | SSDT | Database project (DSP Sql170) - tables, views, functions; builds to .dacpac with MSBuild.exe |
