@@ -60,6 +60,21 @@ syntra-service-1.0.0.34-linux-x64.tar.gz
 SHA256SUMS.txt
 ```
 
+Inside an archive, at its root:
+
+- **The executable.** `CMDSYNTRA.exe` in a console archive, `svcsyntra.exe` in a service
+  one, and the same names without the extension on Linux. Everything beside it is a library
+  it loads. The `.dll` of the same name is the application itself and the `.exe` is the
+  native launcher that starts it, so the two belong together and neither runs alone.
+- **`README.txt`**, naming that executable and the command that runs it, saying where
+  configuration goes, and how to check what was downloaded.
+- **`Configuration/`**, where your `.yaml`, `.yml` or `.json` files belong. The service host
+  loads every file it finds there when it starts, and each needs a cron schedule of its own;
+  the console host runs the single file you name on the command line.
+
+No archive carries `.pdb` or `.xml` files. Debug symbols and API documentation are build
+output rather than product, and a deployed host has no use for either.
+
 Each archive is **self-contained**, so a target server needs no .NET runtime installed.
 That is set in the host projects themselves - conditioned on a runtime identifier being
 given, because a build without one cannot produce a self-contained app - so a hand-run
