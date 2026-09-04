@@ -301,7 +301,8 @@ Folder and project-file names carry the **short form** — the component name wi
 
 Do not "fix" this by lengthening folder names. The tier prefix (`Provider.`, `Consumer.`,
 `Host.`) sorts related projects together in a flat solution, which is what replaces a folder
-tree. Database projects additionally set `SqlTargetName` so the `.dacpac` keeps the full name.
+tree. The database project is outside this rule: a `.dacpac` carries no assembly identity, is
+never loaded by name, and ships as `Consumer.AzureSQL.Database.dacpac`.
 
 The hosts are the deliberate exceptions. An executable's assembly name is what an operator
 types or writes into a service definition, so it is short:
@@ -311,8 +312,12 @@ types or writes into a service definition, so it is short:
 | `Host.Console` | `CMDSYNTRA.exe` |
 | `Host.Service` | `svcsyntra.exe` |
 
-Only an executable may do this. `Directory.Build.targets` fails the build of any library whose
-assembly name does not begin with `PenguinConverters.Syntra.` (`SYNTRA0001`).
+Only an executable may do this. `Directory.Build.targets` enforces the rest:
+
+| Code | Fails when | Because |
+|------|------------|---------|
+| `SYNTRA0001` | a library's `AssemblyName` is not `PenguinConverters.Syntra.{project name}` | a `.csproj` copied from a neighbour with its `AssemblyName` left behind ships a second assembly claiming the neighbour's identity - which is the identity `InstanceBuilder` resolves by name |
+| `SYNTRA0002` | a project name already carries the `PenguinConverters.Syntra.` prefix | the prefix is added by `Directory.Build.props`, so such a folder derives `PenguinConverters.Syntra.PenguinConverters.Syntra.{...}` - a name `SYNTRA0001` cannot see is wrong, since it is exactly what the default produced |
 
 ## 4. API Naming Conventions
 

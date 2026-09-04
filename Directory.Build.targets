@@ -66,18 +66,36 @@
   <!--
     A library here is loaded by name at run time and may be dropped into a deployment as a file,
     so its assembly name is an identity rather than a filename: it has to be unambiguous among
-    everything else in an application directory. Only an executable may be short, because that
-    name is what an operator types.
+    everything else in an application directory. Only an executable may carry a name of its own,
+    because that name is what an operator types.
+
+    Two things can go wrong, and a test that the name merely begins with the prefix catches
+    neither:
+
+    SYNTRA0001 - the name is not the one derived from the folder. A .csproj copied from a
+    neighbour with its <AssemblyName> left behind builds a second assembly claiming to be the
+    neighbour's identity, which is the identity an InstanceBuilder resolves by name. Equality
+    with the derived name is what catches that; a prefix test passes it.
+
+    SYNTRA0002 - the folder itself is named the long way. The prefix is added by
+    Directory.Build.props, so a project folder that already carries it derives
+    PenguinConverters.Syntra.PenguinConverters.Syntra.Provider.Something. SYNTRA0001 cannot see
+    this, because the doubled name is exactly what the default produced; only the project name
+    itself shows it. This is the failure a stale document invites, and it is silent otherwise.
 
     Checked in the targets rather than the props because the project has been evaluated by then,
     so OutputType and any name the project set for itself are both known.
   -->
   <Target Name="ValidateAssemblyName"
           BeforeTargets="CoreCompile"
-          Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' And '$(OutputType)' == 'Library' ">
-    <Error Condition=" !$(AssemblyName.StartsWith('PenguinConverters.Syntra.')) "
+          Condition=" '$(MSBuildProjectExtension)' != '.sqlproj' ">
+    <Error Condition=" $(MSBuildProjectName.StartsWith('PenguinConverters.Syntra.')) "
+           Code="SYNTRA0002"
+           Text="Project name '$(MSBuildProjectName)' must not carry the 'PenguinConverters.Syntra.' prefix. Folders and project files take the short name and Directory.Build.props adds the prefix, so this project would build '$(AssemblyName)'." />
+
+    <Error Condition=" '$(OutputType)' == 'Library' And '$(AssemblyName)' != 'PenguinConverters.Syntra.$(MSBuildProjectName)' "
            Code="SYNTRA0001"
-           Text="Assembly name '$(AssemblyName)' must begin with 'PenguinConverters.Syntra.'. Only an executable may carry a short name." />
+           Text="Assembly name '$(AssemblyName)' must be 'PenguinConverters.Syntra.$(MSBuildProjectName)'. Only an executable may carry a name of its own." />
   </Target>
 
 </Project>
