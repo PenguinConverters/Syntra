@@ -13,11 +13,11 @@
       },
       "Microsoft.Kiota.Abstractions": {
         "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "cb0KA6QGvqMR1xNIjmErb5CiEbQJ/6odKcuPn2GTWD+aRMuldKDqRqRWMDT7MOBcUk9waJyJsgDG+ItQA01JmA==",
+        "requested": "[2.1.1, )",
+        "resolved": "2.1.1",
+        "contentHash": "baV/JJXkuMFZsEpLJUmE1mJUQ38AMG6bTob7lnZMNezwp51HSrIDIWDcHb80pMHOaHg+j5YEh5BSD4LHlXzphw==",
         "dependencies": {
-          "Std.UriTemplate": "2.0.8"
+          "Std.UriTemplate": "2.0.12"
         }
       },
       "Microsoft.Kiota.Authentication.Azure": {
@@ -147,32 +147,32 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "PenguinConverters.Keyra": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "G4Wwu/2DvoWtiFj5oebjZ4/Egf4/zqI+27ogkk0B2wQIjRz04ExttptnJRDBLFXccuAaQ/AXbkN+ktMMelAEjw==",
+        "resolved": "2.19.2",
+        "contentHash": "hYGy9f7PoZar/9jrDIokvDFdcUrCVjtx0D/rLkqJy56XYDRAJSnfYozzYZWE9iWHPu8mjwbfXbkoNi5VbI19bw==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0",
-          "PenguinConverters.Keyra.Core": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2",
+          "PenguinConverters.Keyra.Core": "2.19.2"
         }
       },
       "PenguinConverters.Keyra.Core": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "n3gNOh2mQCXsZumDZdVYLOPWpVfL+U/qXTRWwoH4FcAzZyncFyBNlGbxflpclvcoWmH22r49z+kho48FN96J1g==",
+        "resolved": "2.19.2",
+        "contentHash": "fEKNejfNwk8POQhgd8R4Jb6qD2PC/4n8YEs1tT+QP2DdIY0OhkA2hPS0cqnZYKOJ1UKi5/CX+8I31fcGdEkXxQ==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2"
         }
       },
       "Std.UriTemplate": {
         "type": "Transitive",
-        "resolved": "2.0.8",
-        "contentHash": "IAR4gJlLVD4r/FsU/rDb1+9sbB3/tCFVZz5IzlbM2yHoiUisBi5Ek/KXRUF7RcqNARka79EoaOz9INnXvQ/O6w=="
+        "resolved": "2.0.12",
+        "contentHash": "b/w8GfmVjf5c+8sTtGRVuwj6uC5KoPIn8+795xKlnGBBtph4FIVvgJVnh+x9dbDOkrst7XivIDJgyZSDFNsOYA=="
       },
       "System.ClientModel": {
         "type": "Transitive",
@@ -212,8 +212,8 @@
     "net10.0/linux-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -224,8 +224,8 @@
     "net10.0/win-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
