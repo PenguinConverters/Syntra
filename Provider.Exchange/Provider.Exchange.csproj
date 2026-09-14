@@ -13,7 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Graph" Version="6.5.0" />
     <!-- Transitive pin: Graph 5.x resolves 1.21.1, which has a known high-severity advisory. -->
-    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.1.2" />
     <PackageReference Include="Azure.Identity" Version="1.*" />
   </ItemGroup>
 
