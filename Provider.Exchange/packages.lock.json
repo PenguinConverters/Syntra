@@ -13,9 +13,9 @@
       },
       "Microsoft.Graph": {
         "type": "Direct",
-        "requested": "[6.5.0, )",
-        "resolved": "6.5.0",
-        "contentHash": "44GSZ/Tz2L3ABVec5wl4EinUsCRT/pYE/Msmz8m7Pp2AYTDj3iDjzDjVmcCRGazklrYA/Hens/IEcWWPTrvEwg==",
+        "requested": "[6.8.0, )",
+        "resolved": "6.8.0",
+        "contentHash": "CBU0bRVkiYy8TLiGmGbIUTENCfPnXF+59FCZKCOATS+uN4RmoH350/2chiZheaWUWk22v7rOoWZaJWW4Qtbn7Q==",
         "dependencies": {
           "Microsoft.Graph.Core": "4.0.1"
         }
@@ -58,8 +58,8 @@
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "/a1aJz4m7ylhEDf25ugQChLQoN5XwoGjWw/BoR/ZWWKsO1v4DdJElS1uyngahz4B/eOzjFk1KNTkarRLE5wsIg=="
+        "resolved": "10.0.12",
+        "contentHash": "9/qymSh7hVDMGTGwrLz8MRp5zRyXy9adGDOs4HwRdnLil3oZGYuWeZjbmHgCQ9BL1qBroVfgUK3U/nb61617Cw=="
       },
       "Microsoft.Extensions.Diagnostics.Abstractions": {
         "type": "Transitive",
@@ -92,10 +92,10 @@
       },
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "Ljd0Uxoq5XpScD2Bg0nM/r3mwx7Ao5Uq24eo2ARxbGvqJ7Zht6rt2cJtwVRH4Cv+1ZVMdXz6TB43KbpmsxRrvQ==",
+        "resolved": "10.0.12",
+        "contentHash": "+24lC4plfbEDNfLAdTV/SWKS7dW+16X4HdydO3R++134kSNTzcbYA4KpR1Hdh6uWisB8Za3AzwyOn+K+NxWIug==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12"
         }
       },
       "Microsoft.Extensions.Options": {
@@ -264,26 +264,26 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "PenguinConverters.Keyra": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "G4Wwu/2DvoWtiFj5oebjZ4/Egf4/zqI+27ogkk0B2wQIjRz04ExttptnJRDBLFXccuAaQ/AXbkN+ktMMelAEjw==",
+        "resolved": "2.19.2",
+        "contentHash": "hYGy9f7PoZar/9jrDIokvDFdcUrCVjtx0D/rLkqJy56XYDRAJSnfYozzYZWE9iWHPu8mjwbfXbkoNi5VbI19bw==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0",
-          "PenguinConverters.Keyra.Core": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2",
+          "PenguinConverters.Keyra.Core": "2.19.2"
         }
       },
       "PenguinConverters.Keyra.Core": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "n3gNOh2mQCXsZumDZdVYLOPWpVfL+U/qXTRWwoH4FcAzZyncFyBNlGbxflpclvcoWmH22r49z+kho48FN96J1g==",
+        "resolved": "2.19.2",
+        "contentHash": "fEKNejfNwk8POQhgd8R4Jb6qD2PC/4n8YEs1tT+QP2DdIY0OhkA2hPS0cqnZYKOJ1UKi5/CX+8I31fcGdEkXxQ==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2"
         }
       },
       "Std.UriTemplate": {
@@ -338,8 +338,8 @@
     "net10.0/linux-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
@@ -350,8 +350,8 @@
     "net10.0/win-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.Security.Cryptography.ProtectedData": {
         "type": "Transitive",
