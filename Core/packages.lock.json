@@ -5,21 +5,21 @@
       "Microsoft.Extensions.Logging.Abstractions": {
         "type": "Direct",
         "requested": "[10.0.*, )",
-        "resolved": "10.0.11",
-        "contentHash": "Ljd0Uxoq5XpScD2Bg0nM/r3mwx7Ao5Uq24eo2ARxbGvqJ7Zht6rt2cJtwVRH4Cv+1ZVMdXz6TB43KbpmsxRrvQ==",
+        "resolved": "10.0.13",
+        "contentHash": "aSZEhEig4fvNiw2zs8Z6NyDlniKtq6YjcF3DyHuqTEHcZ2VKA/6itMPZ+dW+yWABWExlDcQwwdbqX1Rcb7W8WQ==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.13"
         }
       },
       "PenguinConverters.Keyra": {
         "type": "Direct",
-        "requested": "[2.19.*, )",
-        "resolved": "2.19.0",
-        "contentHash": "G4Wwu/2DvoWtiFj5oebjZ4/Egf4/zqI+27ogkk0B2wQIjRz04ExttptnJRDBLFXccuAaQ/AXbkN+ktMMelAEjw==",
+        "requested": "[3.4.*, )",
+        "resolved": "3.4.1",
+        "contentHash": "osEu6E5aaC+2wXBbFdKRtZYdtpbgV9kFinoRgMHraxzjNhnFg9FACHS60N0Yk3YKp/5+LMOHvZWEdsNe6e6H2w==",
         "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0",
-          "PenguinConverters.Keyra.Core": "2.19.0"
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
+          "PenguinConverters.CandyStore": "3.4.1",
+          "PenguinConverters.Keyra.Core": "3.4.1"
         }
       },
       "YamlDotNet": {
@@ -30,36 +30,36 @@
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "/a1aJz4m7ylhEDf25ugQChLQoN5XwoGjWw/BoR/ZWWKsO1v4DdJElS1uyngahz4B/eOzjFk1KNTkarRLE5wsIg=="
+        "resolved": "10.0.13",
+        "contentHash": "G2GrGWNAPZBsii2F6AU8n+JT2tC1/I0Ml/e9ZyNCgPjf3hZqronP7o0X91aAynCmVeae8KkSIUNXXeXCNRmdVQ=="
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "3.4.1",
+        "contentHash": "VPsnlRTWqjLPSbbL+VreO7cxd9Ay/qhkyVuhEF3AM7utB7wPNCj+RgI06tWivhMRZTOBlF6yxcN8V6i1U2woiw=="
       },
       "PenguinConverters.Keyra.Core": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "n3gNOh2mQCXsZumDZdVYLOPWpVfL+U/qXTRWwoH4FcAzZyncFyBNlGbxflpclvcoWmH22r49z+kho48FN96J1g==",
+        "resolved": "3.4.1",
+        "contentHash": "JsnFYOqKO5xSHySqOV426YCZwYktH+gqFMVsTxqbZ25kBKUOu9Wh/WJLXmb7W1sqIMV5KxpkknxINkhJ+8jElg==",
         "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "9.0.0",
-          "PenguinConverters.CandyStore": "2.19.0"
+          "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
+          "PenguinConverters.CandyStore": "3.4.1"
         }
       }
     },
     "net10.0/linux-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "3.4.1",
+        "contentHash": "VPsnlRTWqjLPSbbL+VreO7cxd9Ay/qhkyVuhEF3AM7utB7wPNCj+RgI06tWivhMRZTOBlF6yxcN8V6i1U2woiw=="
       }
     },
     "net10.0/win-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "3.4.1",
+        "contentHash": "VPsnlRTWqjLPSbbL+VreO7cxd9Ay/qhkyVuhEF3AM7utB7wPNCj+RgI06tWivhMRZTOBlF6yxcN8V6i1U2woiw=="
       }
     }
   }
