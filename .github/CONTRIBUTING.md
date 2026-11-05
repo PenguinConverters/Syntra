@@ -181,8 +181,6 @@ Short description of what changed and why
 Line 1 is the version, line 2 is the action in capitals (`ADD`, `CHANGE`, `FIX`,
 `REMOVE`), line 3 onward is the detail.
 
-Do not add `Co-Authored-By` trailers for automated tooling.
-
 ## Code of Conduct
 
 This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By participating you
