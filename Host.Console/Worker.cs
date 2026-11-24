@@ -117,13 +117,33 @@ public class Worker
         else
         {
             _logger.LogInformation("Target type: {TargetType}", configuration.Target!.Type);
+            if (string.IsNullOrWhiteSpace(configuration.Target.ObjectNamespace))
+            {
+                configuration.Target.ObjectNamespace = string.IsNullOrWhiteSpace(configuration.ObjectNamespace)
+                    ? Path.GetFileNameWithoutExtension(_configurationPath)
+                    : configuration.ObjectNamespace;
+            }
+
             consumer = BuildConsumer(configuration.Target, yamlDeserializerFunc, decryptor);
         }
 
-        // Run synchronization
         _logger.LogInformation("Starting synchronization");
-        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
-        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await ReleaseAsync(provider).ConfigureAwait(false);
+                await ReleaseAsync(consumer).ConfigureAwait(false);
+            }
+        }
 
         if (consumer.HadErrors)
         {
@@ -132,6 +152,32 @@ public class Worker
         else
         {
             _logger.LogInformation("Synchronization completed successfully");
+        }
+    }
+
+    /// <summary>
+    /// Releases a connector that holds resources, whichever disposal contract it implements.
+    /// </summary>
+    /// <param name="connector">The connector to release.</param>
+    /// <returns>A task that completes when the connector has been released.</returns>
+    private async ValueTask ReleaseAsync(object connector)
+    {
+        try
+        {
+            switch (connector)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to release {Connector}.", connector.GetType().Name);
         }
     }
 
@@ -208,6 +254,12 @@ public class Worker
 internal class SyncConfiguration
 {
     #region Properties
+
+    /// <summary>
+    /// Gets or sets the name identifying this synchronization. The configuration file name
+    /// stands in when it is not set.
+    /// </summary>
+    public string? ObjectNamespace { get; set; }
 
     /// <summary>
     /// Gets or sets the source provider configuration.

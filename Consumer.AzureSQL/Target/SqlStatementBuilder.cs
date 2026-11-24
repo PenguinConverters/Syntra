@@ -3,33 +3,45 @@ using System.Text;
 namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
 
 /// <summary>
-/// Builds the T-SQL used by the bulk synchronization path. Pure text generation with no I/O,
-/// so the statements can be asserted directly in tests.
+/// Builds the T-SQL of the bulk synchronization path: the staging table, the statement that
+/// merges a staged batch into the target, and the catalog query describing the target.
 /// </summary>
 /// <remarks>
-/// Table and column names originate from user configuration and are interpolated into dynamic
-/// SQL. Every identifier is therefore routed through <see cref="QuoteIdentifier"/>, which
-/// bracket-quotes and doubles any embedded closing bracket. Row <em>values</em> never appear in
-/// generated text: they reach the server through <see cref="System.Data.SqlClient"/> bulk copy
-/// or as command parameters.
+/// Every identifier is passed through <see cref="QuoteIdentifier"/> before it reaches statement
+/// text. Row values never appear in statement text; they reach the server through bulk copy or
+/// as command parameters.
 /// </remarks>
 internal static class SqlStatementBuilder
 {
     #region Constants
 
-    /// <summary>Suffix identifying the staging table carrying inserts and updates.</summary>
-    public const string UpsertSuffix = "_U";
+    /// <summary>
+    /// Name of the staging column that orders the rows of a batch by arrival.
+    /// </summary>
+    public const string SequenceColumn = "__S1Sequence";
 
-    /// <summary>Suffix identifying the staging table carrying source-reported deletions.</summary>
-    public const string DeleteSuffix = "_D";
+    /// <summary>
+    /// Name of the staging column that marks a row as a deletion reported by the source.
+    /// </summary>
+    public const string DeletedFlagColumn = "__S1Deleted";
+
+    /// <summary>
+    /// Prefix of every staging table name.
+    /// </summary>
+    public const string TempTablePrefix = "#S1_";
+
+    /// <summary>
+    /// Longest staging table name produced, below the 116 characters the server accepts for a
+    /// local temporary table.
+    /// </summary>
+    public const int MaxTempTableNameLength = 100;
 
     #endregion
 
     #region Methods
 
     /// <summary>
-    /// Quotes an identifier for safe interpolation into dynamic SQL, following the same rule as
-    /// T-SQL <c>QUOTENAME</c>: wrap in brackets and double any embedded <c>]</c>.
+    /// Quotes an identifier by wrapping it in brackets and doubling every embedded closing bracket.
     /// </summary>
     /// <param name="identifier">The raw identifier.</param>
     /// <returns>The bracket-quoted identifier.</returns>
@@ -45,53 +57,57 @@ internal static class SqlStatementBuilder
     }
 
     /// <summary>
-    /// Derives a temporary table name from the synchronization namespace or configuration name.
-    /// Non-alphanumeric characters are replaced with underscores so the result is always a legal
-    /// identifier regardless of the namespace format.
+    /// Builds the two-part quoted name of a database object.
     /// </summary>
-    /// <param name="synchronizationName">The namespace or configuration name.</param>
-    /// <param name="suffix">
-    /// Distinguishes the two staging tables of a run: <see cref="UpsertSuffix"/> or
-    /// <see cref="DeleteSuffix"/>.
-    /// </param>
-    /// <returns>A local temporary table name such as <c>#S1_Contoso_Users_U</c>.</returns>
-    public static string BuildTempTableName(string? synchronizationName, string suffix = "")
+    /// <param name="schemaName">The schema the object belongs to.</param>
+    /// <param name="objectName">The object name.</param>
+    /// <returns>A name such as <c>[dbo].[ADUser]</c>.</returns>
+    public static string QuoteObjectName(string schemaName, string objectName)
     {
-        suffix ??= string.Empty;
+        return string.Concat(QuoteIdentifier(schemaName), ".", QuoteIdentifier(objectName));
+    }
 
-        StringBuilder builder = new StringBuilder();
-        builder.Append("#S1_");
+    /// <summary>
+    /// Derives the local temporary staging table name from the name of a synchronization.
+    /// </summary>
+    /// <param name="objectNamespace">The name identifying the synchronization.</param>
+    /// <returns>
+    /// A name such as <c>#S1_ActiveDirectory_Users</c>: the prefix followed by the given name with
+    /// every character other than a letter or digit replaced by an underscore, cut to
+    /// <see cref="MaxTempTableNameLength"/> characters. An empty name yields <c>#S1_Sync</c>.
+    /// </returns>
+    public static string BuildTempTableName(string? objectNamespace)
+    {
+        StringBuilder builder = new StringBuilder(TempTablePrefix);
 
-        if (string.IsNullOrWhiteSpace(synchronizationName))
+        if (string.IsNullOrWhiteSpace(objectNamespace))
         {
             builder.Append("Sync");
         }
         else
         {
-            foreach (char character in synchronizationName)
+            foreach (char character in objectNamespace.Trim())
                 builder.Append(char.IsLetterOrDigit(character) ? character : '_');
         }
 
-        // SQL Server truncates #temp names at 116 characters. Trim the derived part so the
-        // suffix always survives: it is what keeps the two staging tables distinct.
-        int maxLength = 100 - suffix.Length;
-        if (builder.Length > maxLength)
-            builder.Length = maxLength;
+        if (builder.Length > MaxTempTableNameLength)
+            builder.Length = MaxTempTableNameLength;
 
-        builder.Append(suffix);
         return builder.ToString();
     }
 
     /// <summary>
-    /// Builds the <c>CREATE TABLE</c> for the staging table, mirroring the configured columns.
+    /// Builds the <c>CREATE TABLE</c> statement of the staging table.
     /// </summary>
-    /// <param name="tempTableName">The temporary table name.</param>
-    /// <param name="columns">The ordered column names paired with their SQL types.</param>
-    /// <returns>The <c>CREATE TABLE</c> statement.</returns>
+    /// <param name="tempTableName">The staging table name.</param>
+    /// <param name="columns">The target columns the staging table mirrors.</param>
+    /// <returns>
+    /// A statement declaring every given column nullable with the type and collation of its target
+    /// column, followed by the <see cref="DeletedFlagColumn"/> and <see cref="SequenceColumn"/>
+    /// control columns.
+    /// </returns>
     /// <exception cref="ArgumentException">Thrown when no columns are supplied.</exception>
-    public static string BuildCreateTempTable(
-        string tempTableName,
-        IReadOnlyList<KeyValuePair<string, string>> columns)
+    public static string BuildCreateTempTable(string tempTableName, IReadOnlyList<TargetColumn> columns)
     {
         if (columns is null || columns.Count == 0)
             throw new ArgumentException("At least one column is required.", nameof(columns));
@@ -99,211 +115,231 @@ internal static class SqlStatementBuilder
         StringBuilder builder = new StringBuilder();
         builder.Append("CREATE TABLE ").Append(QuoteIdentifier(tempTableName)).AppendLine(" (");
 
-        for (int i = 0; i < columns.Count; i++)
+        foreach (TargetColumn column in columns)
         {
-            builder
-                .Append("    ")
-                .Append(QuoteIdentifier(columns[i].Key))
-                .Append(' ')
-                .Append(columns[i].Value);
+            builder.Append("    ").Append(QuoteIdentifier(column.Name)).Append(' ').Append(column.Declaration);
 
-            if (i < columns.Count - 1)
-                builder.Append(',');
+            if (!string.IsNullOrWhiteSpace(column.Collation))
+                builder.Append(" COLLATE ").Append(column.Collation);
 
-            builder.AppendLine();
+            builder.AppendLine(" NULL,");
         }
 
+        builder.Append("    ").Append(QuoteIdentifier(DeletedFlagColumn)).AppendLine(" BIT NOT NULL,");
+        builder.Append("    ").Append(QuoteIdentifier(SequenceColumn)).AppendLine(" BIGINT NOT NULL");
         builder.Append(");");
+
         return builder.ToString();
     }
 
     /// <summary>
-    /// Builds the set-based <c>MERGE</c> that moves one staged batch into the target table.
-    /// Emits <c>WHEN MATCHED</c> and <c>WHEN NOT MATCHED BY TARGET</c> only.
+    /// Builds the <c>MERGE</c> statement that applies one staged batch to the target table.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Never add a <c>WHEN NOT MATCHED BY SOURCE</c> clause to this statement.</b>
+    /// The source of the statement is the staging table reduced to the latest row per primary
+    /// key, so a key staged several times in one batch is applied once with its last state.
     /// </para>
     /// <para>
-    /// The MERGE target is the whole destination table, but the source is a single <em>batch</em>
-    /// of at most <c>BatchSize</c> rows, not the full result of the synchronization.
-    /// <c>WHEN NOT MATCHED BY SOURCE</c> matches every target row absent from the source, so in a
-    /// per-batch MERGE it matches every row not in the batch currently being flushed. Adding
-    /// <c>THEN DELETE</c> would therefore delete the entire table on the first flush and leave
-    /// only the last batch behind; adding <c>THEN UPDATE</c> would mark every one of those rows
-    /// deleted. The statement is safe today precisely because that clause is absent and the two
-    /// clauses present can only touch rows the batch actually carries.
+    /// A matched row is updated only when at least one non-key column differs. The comparison is
+    /// exact: character data is compared by its bytes, independent of collation.
     /// </para>
     /// <para>
-    /// The temptation is real, because it looks like the natural way to make the MERGE perform
-    /// full-sync deletion reconciliation, and reconciliation is still unimplemented. It is not.
-    /// Deletion has two separate paths that are already correct:
+    /// A staged deletion removes the matched row when <paramref name="softDeleteColumn"/> is
+    /// <c>null</c>. Otherwise it stamps that column with the current UTC time, leaves every other
+    /// column untouched and does not stamp a row that is already marked. A staged non-deletion
+    /// clears the column again. A staged deletion with no matching row writes nothing.
     /// </para>
-    /// <list type="bullet">
-    /// <item>
-    /// Entities the source reports as deleted travel through the staging tables. With a
-    /// soft-delete column that is an ordinary UPDATE applied by this MERGE; without one it is
-    /// <see cref="BuildDeleteFromStaging"/>, whose <c>INNER JOIN</c> against the key-only delete
-    /// staging table can by construction only reach keys the source supplied.
-    /// </item>
-    /// <item>
-    /// Entities that merely stopped being returned are found by full-sync reconciliation in
-    /// <c>Consumer.DeletionTrivialAsync</c>, which compares the target against the composite keys
-    /// observed across the <em>whole</em> run and is threshold-guarded. That comparison needs the
-    /// complete key set, which no single batch has, so it cannot be expressed here.
-    /// </item>
-    /// </list>
     /// <para>
-    /// If a per-batch MERGE ever does need to reach beyond the staged keys, restrict the target
-    /// first, for example by merging into a common table expression filtered to keys present in
-    /// staging, so no clause can touch a row the batch does not carry.
+    /// The statement touches only rows whose key is staged. It holds a range lock on the target
+    /// for its duration, so concurrent statements against the same target cannot both insert the
+    /// same key.
     /// </para>
     /// </remarks>
-    /// <param name="targetTable">The destination table name.</param>
+    /// <param name="targetObject">The quoted, schema-qualified target table name.</param>
     /// <param name="tempTableName">The staging table name.</param>
-    /// <param name="allColumns">Every column participating in the merge.</param>
-    /// <param name="primaryKeys">The columns forming the match condition.</param>
+    /// <param name="columns">Every staged data column, primary key columns included.</param>
+    /// <param name="primaryKeys">The names of the columns forming the match condition.</param>
+    /// <param name="softDeleteColumn">
+    /// The target column recording a deletion time, or <c>null</c> to delete rows physically.
+    /// </param>
     /// <returns>The <c>MERGE</c> statement.</returns>
     /// <exception cref="ArgumentException">
     /// Thrown when no columns or no primary keys are supplied.
     /// </exception>
     public static string BuildMerge(
-        string targetTable,
+        string targetObject,
         string tempTableName,
-        IReadOnlyList<string> allColumns,
-        IReadOnlyList<string> primaryKeys)
+        IReadOnlyList<TargetColumn> columns,
+        IReadOnlyList<string> primaryKeys,
+        string? softDeleteColumn)
     {
-        if (allColumns is null || allColumns.Count == 0)
-            throw new ArgumentException("At least one column is required.", nameof(allColumns));
+        if (columns is null || columns.Count == 0)
+            throw new ArgumentException("At least one column is required.", nameof(columns));
         if (primaryKeys is null || primaryKeys.Count == 0)
             throw new ArgumentException("At least one primary key is required.", nameof(primaryKeys));
 
         HashSet<string> keySet = new HashSet<string>(primaryKeys, StringComparer.OrdinalIgnoreCase);
-        List<string> updatable = allColumns.Where(c => !keySet.Contains(c)).ToList();
+        List<TargetColumn> updatable = columns.Where(column => !keySet.Contains(column.Name)).ToList();
+
+        string deletedFlag = QuoteIdentifier(DeletedFlagColumn);
+        string sequence = QuoteIdentifier(SequenceColumn);
+        string columnList = string.Join(", ", columns.Select(column => QuoteIdentifier(column.Name)));
+        string keyList = string.Join(", ", primaryKeys.Select(QuoteIdentifier));
+        string newLine = Environment.NewLine;
 
         StringBuilder builder = new StringBuilder();
-        builder.Append("MERGE INTO ").Append(QuoteIdentifier(targetTable)).AppendLine(" AS target");
-        builder.Append("USING ").Append(QuoteIdentifier(tempTableName)).AppendLine(" AS source");
+        builder.Append("MERGE INTO ").Append(targetObject).AppendLine(" WITH (HOLDLOCK) AS target");
+        builder.AppendLine("USING (");
+        builder.Append("    SELECT ").Append(columnList).Append(", ").AppendLine(deletedFlag);
+        builder.AppendLine("      FROM (");
+        builder.Append("        SELECT ").Append(columnList).Append(", ").Append(deletedFlag).AppendLine(",");
+        builder.Append("               ROW_NUMBER() OVER (PARTITION BY ").Append(keyList)
+            .Append(" ORDER BY ").Append(sequence).AppendLine(" DESC) AS [__S1Rank]");
+        builder.Append("          FROM ").AppendLine(QuoteIdentifier(tempTableName));
+        builder.AppendLine("      ) AS staged");
+        builder.AppendLine("     WHERE staged.[__S1Rank] = 1");
+        builder.AppendLine(") AS source");
 
         builder.Append("    ON ");
         builder.AppendLine(string.Join(
-            Environment.NewLine + "   AND ",
-            primaryKeys.Select(k =>
-                $"target.{QuoteIdentifier(k)} = source.{QuoteIdentifier(k)}")));
+            newLine + "   AND ",
+            primaryKeys.Select(key => $"target.{QuoteIdentifier(key)} = source.{QuoteIdentifier(key)}")));
 
-        // A key-only table has nothing to update; emitting an empty SET is a syntax error.
-        if (updatable.Count > 0)
+        string? changed = updatable.Count == 0
+            ? null
+            : string.Concat(
+                "EXISTS (SELECT ",
+                string.Join(", ", updatable.Select(column => BuildComparable("source", column))),
+                " EXCEPT SELECT ",
+                string.Join(", ", updatable.Select(column => BuildComparable("target", column))),
+                ")");
+
+        if (softDeleteColumn is null)
         {
-            builder.AppendLine("WHEN MATCHED THEN");
+            builder.Append("WHEN MATCHED AND source.").Append(deletedFlag).AppendLine(" = 1 THEN");
+            builder.AppendLine("    DELETE");
+
+            if (changed is not null)
+            {
+                builder.Append("WHEN MATCHED AND ").Append(changed).AppendLine(" THEN");
+                builder.Append("    UPDATE SET ");
+                builder.AppendLine(string.Join(
+                    "," + newLine + "               ",
+                    updatable.Select(column =>
+                        $"target.{QuoteIdentifier(column.Name)} = source.{QuoteIdentifier(column.Name)}")));
+            }
+        }
+        else
+        {
+            string softDelete = QuoteIdentifier(softDeleteColumn);
+            string reinstated = changed is null
+                ? $"target.{softDelete} IS NOT NULL"
+                : $"(target.{softDelete} IS NOT NULL OR {changed})";
+
+            builder.AppendLine("WHEN MATCHED AND (");
+            builder.Append("        (source.").Append(deletedFlag).Append(" = 1 AND target.")
+                .Append(softDelete).AppendLine(" IS NULL)");
+            builder.Append("     OR (source.").Append(deletedFlag).Append(" = 0 AND ")
+                .Append(reinstated).AppendLine(")) THEN");
             builder.Append("    UPDATE SET ");
-            builder.AppendLine(string.Join(
-                "," + Environment.NewLine + "               ",
-                updatable.Select(c =>
-                    $"target.{QuoteIdentifier(c)} = source.{QuoteIdentifier(c)}")));
+
+            List<string> assignments = updatable
+                .Select(column => string.Concat(
+                    "target.", QuoteIdentifier(column.Name),
+                    " = CASE WHEN source.", deletedFlag, " = 1 THEN target.", QuoteIdentifier(column.Name),
+                    " ELSE source.", QuoteIdentifier(column.Name), " END"))
+                .ToList();
+
+            assignments.Add(string.Concat(
+                "target.", softDelete,
+                " = CASE WHEN source.", deletedFlag, " = 1 THEN SYSUTCDATETIME() ELSE NULL END"));
+
+            builder.AppendLine(string.Join("," + newLine + "               ", assignments));
         }
 
-        string columnList = string.Join(", ", allColumns.Select(QuoteIdentifier));
-        string sourceList = string.Join(", ", allColumns.Select(c => $"source.{QuoteIdentifier(c)}"));
-
-        // "BY TARGET" is written out rather than the equivalent bare "WHEN NOT MATCHED" so the
-        // contrast with BY SOURCE is visible at the point someone would edit this list.
-        builder.AppendLine("WHEN NOT MATCHED BY TARGET THEN");
+        builder.Append("WHEN NOT MATCHED BY TARGET AND source.").Append(deletedFlag).AppendLine(" = 0 THEN");
         builder.Append("    INSERT (").Append(columnList).AppendLine(")");
-        builder.Append("    VALUES (").Append(sourceList).AppendLine(")");
-
-        // Do not add WHEN NOT MATCHED BY SOURCE here. The source is one batch, not the whole
-        // synchronization, so that clause matches every row outside the current batch: THEN
-        // DELETE empties the table down to the last batch flushed. See the remarks on this
-        // method for the two deletion paths that already handle this correctly.
-
-        builder.Append(';');
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Builds the statement that removes rows the source reported as deleted, matching the target
-    /// against the key-only delete staging table.
-    /// </summary>
-    /// <remarks>
-    /// Only used when the target has no soft-delete column. A soft delete is an ordinary UPDATE
-    /// of the timestamp column, so those rows travel through the upsert staging table and the
-    /// MERGE handles them; no separate statement and no second staging table are involved.
-    /// </remarks>
-    /// <param name="targetTable">The destination table name.</param>
-    /// <param name="deleteTableName">The staging table holding the keys to remove.</param>
-    /// <param name="primaryKeys">The columns forming the match condition.</param>
-    /// <returns>The delete statement.</returns>
-    /// <exception cref="ArgumentException">Thrown when no primary keys are supplied.</exception>
-    public static string BuildDeleteFromStaging(
-        string targetTable,
-        string deleteTableName,
-        IReadOnlyList<string> primaryKeys)
-    {
-        if (primaryKeys is null || primaryKeys.Count == 0)
-            throw new ArgumentException("At least one primary key is required.", nameof(primaryKeys));
-
-        string correlation = string.Join(
-            Environment.NewLine + "          AND ",
-            primaryKeys.Select(k =>
-                $"target.{QuoteIdentifier(k)} = staged.{QuoteIdentifier(k)}"));
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("DELETE target");
-        builder.Append("  FROM ").Append(QuoteIdentifier(targetTable)).AppendLine(" AS target");
-        builder.Append(" INNER JOIN ").Append(QuoteIdentifier(deleteTableName)).AppendLine(" AS staged");
-        builder.Append("    ON ").Append(correlation).Append(';');
+        builder.Append("    VALUES (")
+            .Append(string.Join(", ", columns.Select(column => $"source.{QuoteIdentifier(column.Name)}")))
+            .Append(");");
 
         return builder.ToString();
     }
 
     /// <summary>
-    /// Returns the query that reads the target table's column definitions from the live database.
-    /// The staging table is built from this rather than from configured type strings, so staged
-    /// values always match the destination type exactly and the MERGE performs no implicit
-    /// conversion.
+    /// Returns the query that reads the writable columns of the target table from the catalog.
     /// </summary>
     /// <remarks>
-    /// The table name is passed as the <c>@TableName</c> parameter to <c>OBJECT_ID</c>, so this
-    /// query carries no interpolated identifier at all.
-    ///
-    /// <c>TYPE_NAME(system_type_id)</c> is used deliberately in preference to joining
-    /// <c>sys.types</c> on <c>user_type_id</c>. The latter returns the <em>declared</em> type,
-    /// which for an alias type (<c>CREATE TYPE</c>) is a name defined in the user database. The
-    /// staging table is created in <c>tempdb</c>, where that name does not resolve, so the
-    /// <c>CREATE TABLE</c> would fail. Resolving to the base system type keeps staging valid
-    /// regardless of alias types on the target.
-    ///
-    /// Computed and <c>rowversion</c> columns are excluded: neither can be inserted, so a MERGE
-    /// that tried to write them would fail.
+    /// The table is named by the <c>@TableName</c> parameter, which accepts a one-, two- or
+    /// three-part name. Each row carries the schema and object name the parameter resolved to,
+    /// the column name, its system type name, byte length, precision, scale and collation.
+    /// Alias types are reported as their underlying system type. Computed, identity, generated
+    /// and <c>rowversion</c> columns are left out because they cannot be written.
     /// </remarks>
-    /// <returns>The parameterised schema query.</returns>
-    public static string BuildColumnSchemaQuery()
+    /// <returns>The parameterised catalog query.</returns>
+    public static string BuildTargetSchemaQuery()
     {
         return """
-            SELECT c.name                          AS ColumnName,
+            SELECT OBJECT_SCHEMA_NAME(c.object_id) AS SchemaName,
+                   OBJECT_NAME(c.object_id)        AS ObjectName,
+                   c.name                          AS ColumnName,
                    TYPE_NAME(c.system_type_id)     AS TypeName,
                    c.max_length                    AS MaxLength,
                    c.precision                     AS Precision,
-                   c.scale                         AS Scale
+                   c.scale                         AS Scale,
+                   c.collation_name                AS CollationName
               FROM sys.columns AS c
              WHERE c.object_id = OBJECT_ID(@TableName)
                AND c.is_computed = 0
+               AND c.is_identity = 0
+               AND c.generated_always_type = 0
                AND TYPE_NAME(c.system_type_id) <> 'timestamp'
              ORDER BY c.column_id;
             """;
     }
 
     /// <summary>
-    /// Renders a SQL type declaration from <c>sys.columns</c> metadata.
+    /// Returns the query that lists the key columns of every usable unique index on the target table.
     /// </summary>
-    /// <param name="typeName">The type name from <c>sys.types</c>.</param>
-    /// <param name="maxLength">
-    /// The <c>max_length</c> value, in bytes; <c>-1</c> denotes a MAX type.
-    /// </param>
+    /// <remarks>
+    /// The table is named by the <c>@TableName</c> parameter. Each row carries an index identifier
+    /// and one of its key column names. Disabled and filtered indexes are left out, as are
+    /// included columns.
+    /// </remarks>
+    /// <returns>The parameterised catalog query.</returns>
+    public static string BuildUniqueIndexQuery()
+    {
+        return """
+            SELECT i.index_id AS IndexId,
+                   c.name     AS ColumnName
+              FROM sys.indexes AS i
+              JOIN sys.index_columns AS ic
+                ON ic.object_id = i.object_id
+               AND ic.index_id = i.index_id
+              JOIN sys.columns AS c
+                ON c.object_id = ic.object_id
+               AND c.column_id = ic.column_id
+             WHERE i.object_id = OBJECT_ID(@TableName)
+               AND i.is_unique = 1
+               AND i.is_disabled = 0
+               AND i.has_filter = 0
+               AND ic.is_included_column = 0
+             ORDER BY i.index_id, ic.key_ordinal;
+            """;
+    }
+
+    /// <summary>
+    /// Renders a SQL type declaration from catalog metadata.
+    /// </summary>
+    /// <param name="typeName">The system type name.</param>
+    /// <param name="maxLength">The length in bytes; <c>-1</c> denotes a MAX type.</param>
     /// <param name="precision">The numeric precision.</param>
     /// <param name="scale">The numeric or temporal scale.</param>
     /// <returns>A type declaration such as <c>NVARCHAR(255)</c> or <c>DECIMAL(18,4)</c>.</returns>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="typeName"/> is null, empty or whitespace.
+    /// </exception>
     public static string RenderSqlType(string typeName, short maxLength, byte precision, byte scale)
     {
         if (string.IsNullOrWhiteSpace(typeName))
@@ -315,7 +351,6 @@ internal static class SqlStatementBuilder
         {
             case "NVARCHAR":
             case "NCHAR":
-                // max_length is in bytes; national types store two bytes per character.
                 return maxLength < 0 ? $"{type}(MAX)" : $"{type}({maxLength / 2})";
 
             case "VARCHAR":
@@ -337,27 +372,63 @@ internal static class SqlStatementBuilder
                 return $"{type}({precision})";
 
             default:
-                // Fixed-width types (INT, BIGINT, BIT, UNIQUEIDENTIFIER, DATE, MONEY, ...)
-                // carry no length or precision specifier.
                 return type;
         }
     }
 
-    /// <summary>Builds a <c>TRUNCATE TABLE</c> for the staging table.</summary>
+    /// <summary>
+    /// Builds the statement that empties the staging table.
+    /// </summary>
     /// <param name="tempTableName">The staging table name.</param>
     /// <returns>The <c>TRUNCATE TABLE</c> statement.</returns>
     public static string BuildTruncate(string tempTableName)
-        => $"TRUNCATE TABLE {QuoteIdentifier(tempTableName)};";
+    {
+        return $"TRUNCATE TABLE {QuoteIdentifier(tempTableName)};";
+    }
 
-    /// <summary>Builds a conditional <c>DROP TABLE</c> for the staging table.</summary>
+    /// <summary>
+    /// Builds the statement that drops the staging table when the current session has one.
+    /// </summary>
     /// <param name="tempTableName">The staging table name.</param>
     /// <returns>The guarded <c>DROP TABLE</c> statement.</returns>
     public static string BuildDropTempTableIfExists(string tempTableName)
     {
-        // tempdb.sys.objects rather than OBJECT_ID(...) so the check is session-correct
-        // for local temporary tables, whose names are suffixed per session.
         string literal = tempTableName.Replace("'", "''");
         return $"IF OBJECT_ID(N'tempdb..{literal}') IS NOT NULL DROP TABLE {QuoteIdentifier(tempTableName)};";
+    }
+
+    /// <summary>
+    /// Builds the expression under which a column takes part in change detection.
+    /// </summary>
+    /// <param name="alias">The table alias the column is read from.</param>
+    /// <param name="column">The column to compare.</param>
+    /// <returns>
+    /// The column converted to binary for character, XML and large-object types, and the plain
+    /// column reference for every other type.
+    /// </returns>
+    private static string BuildComparable(string alias, TargetColumn column)
+    {
+        string reference = $"{alias}.{QuoteIdentifier(column.Name)}";
+
+        switch (column.BaseType)
+        {
+            case "CHAR":
+            case "VARCHAR":
+            case "NCHAR":
+            case "NVARCHAR":
+            case "IMAGE":
+                return $"CAST({reference} AS VARBINARY(MAX))";
+
+            case "NTEXT":
+            case "XML":
+                return $"CAST(CAST({reference} AS NVARCHAR(MAX)) AS VARBINARY(MAX))";
+
+            case "TEXT":
+                return $"CAST(CAST({reference} AS VARCHAR(MAX)) AS VARBINARY(MAX))";
+
+            default:
+                return reference;
+        }
     }
 
     #endregion

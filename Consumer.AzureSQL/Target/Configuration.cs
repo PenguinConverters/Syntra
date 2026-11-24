@@ -48,17 +48,15 @@ public class Configuration
     public string? TableName { get; set; }
 
     /// <summary>
-    /// Gets or sets the unique name of this synchronization configuration, for example
-    /// <c>ActiveDirectory.groups2AzureSQL.ADGroup_DELTA</c>.
+    /// Gets or sets the name identifying the synchronization this consumer runs for, as given by
+    /// <c>ObjectNamespace</c> at the root of the job configuration.
     /// </summary>
     /// <remarks>
-    /// The staging table name is derived from this, so it identifies the run rather than the
-    /// destination. Several configurations may target the same table — a full and a delta sync of
-    /// the same entity, or two sources feeding one table — and each needs its own staging area.
-    /// Only one run of a given configuration is expected at a time, which is what makes the name
-    /// safe to reuse. Falls back to <see cref="TableName"/> when not supplied.
+    /// The staging table is named after this value. The host supplies it and guarantees that only
+    /// one run carrying a given name is active at a time. When it is empty the staging table is
+    /// named after <see cref="TableName"/>.
     /// </remarks>
-    public string? ConfigurationName { get; set; }
+    public string? ObjectNamespace { get; set; }
 
     /// <summary>
     /// Gets or sets the column definitions for the target table.

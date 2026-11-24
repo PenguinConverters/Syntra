@@ -261,15 +261,57 @@ public class Worker : IHostedService, IDisposable
         IProvider provider = BuildProvider(config.Source, yamlDeserializerFunc, decryptor);
 
         // Build consumer
+        if (string.IsNullOrWhiteSpace(config.Target.ObjectNamespace))
+            config.Target.ObjectNamespace = job.Name;
+
         IConsumer consumer = BuildConsumer(config.Target, yamlDeserializerFunc, decryptor);
 
-        // Run synchronization
-        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
-        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await ReleaseAsync(provider).ConfigureAwait(false);
+                await ReleaseAsync(consumer).ConfigureAwait(false);
+            }
+        }
 
         if (consumer.HadErrors)
         {
             _logger.LogWarning("Job '{Name}' completed with errors", job.Name);
+        }
+    }
+
+    /// <summary>
+    /// Releases a connector that holds resources, whichever disposal contract it implements.
+    /// </summary>
+    /// <param name="connector">The connector to release.</param>
+    /// <returns>A task that completes when the connector has been released.</returns>
+    private async ValueTask ReleaseAsync(object connector)
+    {
+        try
+        {
+            switch (connector)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to release {Connector}.", connector.GetType().Name);
         }
     }
 

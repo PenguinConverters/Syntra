@@ -238,8 +238,16 @@ public class Handler
         }
     }
 
+    /// <summary>
+    /// Serializes the target section for the consumer, carrying the name of the synchronization
+    /// when the section does not set one itself.
+    /// </summary>
+    /// <returns>The serialized target configuration, or <c>null</c> when it cannot be serialized.</returns>
     private byte[]? SerializeTargetConfiguration()
     {
+        if (string.IsNullOrWhiteSpace(_configuration.Target.ObjectNamespace))
+            _configuration.Target.ObjectNamespace = _configuration.ObjectNamespace;
+
         try
         {
             return JsonSerializerExtensions.Serialize(_configuration.Target);

@@ -20,6 +20,15 @@ public class TargetConfiguration
     public string? TableName { get; set; }
 
     /// <summary>
+    /// Gets or sets the name identifying the synchronization this target is written for.
+    /// </summary>
+    /// <remarks>
+    /// Carries <see cref="Configuration.ObjectNamespace"/> to the consumer. The pipeline fills it
+    /// in before the consumer is built when the target section does not set it.
+    /// </remarks>
+    public string? ObjectNamespace { get; set; }
+
+    /// <summary>
     /// Gets or sets the connection string for the target system.
     /// May be a Keyra-protected value; disclose it with the pipeline's decryptor.
     /// </summary>
