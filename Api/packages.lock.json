@@ -5,10 +5,10 @@
       "Microsoft.AspNetCore.Authentication.Negotiate": {
         "type": "Direct",
         "requested": "[10.0.*, )",
-        "resolved": "10.0.11",
-        "contentHash": "XjvGMQ0+Y22t7jQKS8ZW3UvJNhNC0AT/Et2Mf8XZj4MmNawqpxt8Xvm4wLCkAOrqiVqGmz9b+kwi54DuyfPyCg==",
+        "resolved": "10.0.14",
+        "contentHash": "Cdx0gV3t2+0lCdvFRvze2PtZT6K1BDAZWMQGE/ROkPqPsL1wnw3qnXKdEWG6iSEQShvjrvqv2ReUE4OWTTMFVA==",
         "dependencies": {
-          "System.DirectoryServices.Protocols": "10.0.11"
+          "System.DirectoryServices.Protocols": "10.0.14"
         }
       },
       "Microsoft.Data.SqlClient": {
@@ -45,9 +45,9 @@
       },
       "Microsoft.OpenApi": {
         "type": "Direct",
-        "requested": "[3.10.2, )",
-        "resolved": "3.10.2",
-        "contentHash": "qzg4a3WmgQm28Azaporbnsu+KHA+vq5sgpQQFLiJgB06Rra2S+kzGAU7pzUB8/UIwZJCSCY2JEE/M5e0hQ2K8w=="
+        "requested": "[3.11.0, )",
+        "resolved": "3.11.0",
+        "contentHash": "kvQz+mL/fnDw2VaE8zMyQhbMv7FmOYUydIhCVNKxQdrLu9XiMT/07DHwJ5YkRO2uzcxTFvMAKFKKywxoyLKHcA=="
       },
       "Swashbuckle.AspNetCore": {
         "type": "Direct",
@@ -311,24 +311,24 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "PenguinConverters.Keyra": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "G4Wwu/2DvoWtiFj5oebjZ4/Egf4/zqI+27ogkk0B2wQIjRz04ExttptnJRDBLFXccuAaQ/AXbkN+ktMMelAEjw==",
+        "resolved": "2.19.2",
+        "contentHash": "hYGy9f7PoZar/9jrDIokvDFdcUrCVjtx0D/rLkqJy56XYDRAJSnfYozzYZWE9iWHPu8mjwbfXbkoNi5VbI19bw==",
         "dependencies": {
-          "PenguinConverters.CandyStore": "2.19.0",
-          "PenguinConverters.Keyra.Core": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2",
+          "PenguinConverters.Keyra.Core": "2.19.2"
         }
       },
       "PenguinConverters.Keyra.Core": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "n3gNOh2mQCXsZumDZdVYLOPWpVfL+U/qXTRWwoH4FcAzZyncFyBNlGbxflpclvcoWmH22r49z+kho48FN96J1g==",
+        "resolved": "2.19.2",
+        "contentHash": "fEKNejfNwk8POQhgd8R4Jb6qD2PC/4n8YEs1tT+QP2DdIY0OhkA2hPS0cqnZYKOJ1UKi5/CX+8I31fcGdEkXxQ==",
         "dependencies": {
-          "PenguinConverters.CandyStore": "2.19.0"
+          "PenguinConverters.CandyStore": "2.19.2"
         }
       },
       "Swashbuckle.AspNetCore.Swagger": {
@@ -370,8 +370,8 @@
       },
       "System.DirectoryServices.Protocols": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "Q4DEPB0wfAMAM6zjCjioFQoDZGC6uCeAZMU30sdjMgVtKbSuSBjhASVlxVOTYmQKCdUqZInnDwZ3W/ZTWB4m3Q=="
+        "resolved": "10.0.14",
+        "contentHash": "uZAVEVyWAhQxtKIIoNYCzbtKhcIMHjY0viEbmkfpTZ9O/4fzOTlYHUAqirOL8anzBmSAx8xOk7o7R86mBgTfzQ=="
       },
       "System.IdentityModel.Tokens.Jwt": {
         "type": "Transitive",
@@ -440,13 +440,13 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.DirectoryServices.Protocols": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "Q4DEPB0wfAMAM6zjCjioFQoDZGC6uCeAZMU30sdjMgVtKbSuSBjhASVlxVOTYmQKCdUqZInnDwZ3W/ZTWB4m3Q=="
+        "resolved": "10.0.14",
+        "contentHash": "uZAVEVyWAhQxtKIIoNYCzbtKhcIMHjY0viEbmkfpTZ9O/4fzOTlYHUAqirOL8anzBmSAx8xOk7o7R86mBgTfzQ=="
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
@@ -484,13 +484,13 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "2.19.0",
-        "contentHash": "AfiDw3dOSxlgVRv2BUYE9Mv0ivvbvzJyjT7BaQtb4RKgiiJusYgNQNRJ3i7Ie4FOai+j4z0Ted8KMyoUzTGZDQ=="
+        "resolved": "2.19.2",
+        "contentHash": "UJyzWpoHQy1pyybtmpmUeAwKSqjoDIdZ+TpTCbxBSHqRheqvqgCJtuLfpNhuI7aBqOWVa6z5AD05kepfk0aSWg=="
       },
       "System.DirectoryServices.Protocols": {
         "type": "Transitive",
-        "resolved": "10.0.11",
-        "contentHash": "Q4DEPB0wfAMAM6zjCjioFQoDZGC6uCeAZMU30sdjMgVtKbSuSBjhASVlxVOTYmQKCdUqZInnDwZ3W/ZTWB4m3Q=="
+        "resolved": "10.0.14",
+        "contentHash": "uZAVEVyWAhQxtKIIoNYCzbtKhcIMHjY0viEbmkfpTZ9O/4fzOTlYHUAqirOL8anzBmSAx8xOk7o7R86mBgTfzQ=="
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
