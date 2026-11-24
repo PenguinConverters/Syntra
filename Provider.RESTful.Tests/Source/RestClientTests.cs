@@ -277,7 +277,7 @@ public class RestClientTests
     }
 
     [Test]
-    public void ReadAsync_WithUnsuccessfulResponse_ThrowsCarryingTheBody()
+    public async Task ReadAsync_WithUnsuccessfulResponse_ThrowsCarryingTheBody()
     {
         //Arrange
         StubHttpMessageHandler transport = new StubHttpMessageHandler(
@@ -285,7 +285,7 @@ public class RestClientTests
                 """{"error":"no such form"}""", HttpStatusCode.BadRequest));
 
         //Act
-        HttpRequestException? exception = Assert.ThrowsAsync<HttpRequestException>(
+        HttpRequestException? exception = await Assert.ThrowsAsync<HttpRequestException>(
             async () => await ReadAllAsync(transport, new Configuration()));
 
         //Assert
