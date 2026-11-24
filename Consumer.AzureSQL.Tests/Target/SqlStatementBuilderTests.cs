@@ -11,6 +11,16 @@ public class SqlStatementBuilderTests
     #region Methods
 
     /// <summary>
+    /// Collapses every run of whitespace in a statement into a single space.
+    /// </summary>
+    /// <param name="sql">The statement text.</param>
+    /// <returns>The statement on one line.</returns>
+    private static string Flat(string sql)
+    {
+        return System.Text.RegularExpressions.Regex.Replace(sql, @"\s+", " ").Trim();
+    }
+
+    /// <summary>
     /// Creates a column description the way the catalog would report it.
     /// </summary>
     /// <param name="name">The column name.</param>
@@ -156,11 +166,11 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.StartWith("CREATE TABLE [#S1_Users] ("));
-            Assert.That(sql, Does.Contain("[Id] UNIQUEIDENTIFIER NULL,"));
-            Assert.That(sql, Does.Contain("[Na]]me] NVARCHAR(50) COLLATE Latin1_General_100_CS_AS NULL,"));
-            Assert.That(sql, Does.Contain("[__S1Deleted] BIT NOT NULL,"));
-            Assert.That(sql, Does.Contain("[__S1Sequence] BIGINT NOT NULL"));
+            Assert.That(Flat(sql), Does.StartWith("CREATE TABLE [#S1_Users] ( [Id] UNIQUEIDENTIFIER NULL,"));
+            Assert.That(Flat(sql), Does.Contain("[Id] UNIQUEIDENTIFIER NULL,"));
+            Assert.That(Flat(sql), Does.Contain("[Na]]me] NVARCHAR(50) COLLATE Latin1_General_100_CS_AS NULL,"));
+            Assert.That(Flat(sql), Does.Contain("[__S1Deleted] BIT NOT NULL,"));
+            Assert.That(Flat(sql), Does.Contain("[__S1Sequence] BIGINT NOT NULL"));
         });
     }
 
@@ -202,9 +212,9 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Contain("MERGE INTO [dbo].[Users] WITH (HOLDLOCK) AS target"));
-            Assert.That(sql, Does.Contain("ON target.[TenantId] = source.[TenantId]"));
-            Assert.That(sql, Does.Contain("AND target.[Name] = source.[Name]"));
+            Assert.That(Flat(sql), Does.StartWith("MERGE INTO [dbo].[Users] DST USING ("));
+            Assert.That(Flat(sql), Does.Contain("ON (DST.[TenantId] = SRC.[TenantId] AND DST.[Name] = SRC.[Name])"));
+            Assert.That(Flat(sql), Does.Not.Contain("WITH ("));
         });
     }
 
@@ -224,8 +234,8 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Contain("ROW_NUMBER() OVER (PARTITION BY [Id] ORDER BY [__S1Sequence] DESC)"));
-            Assert.That(sql, Does.Contain("WHERE staged.[__S1Rank] = 1"));
+            Assert.That(Flat(sql), Does.Contain("ROW_NUMBER() OVER (PARTITION BY [Id] ORDER BY [__S1Sequence] DESC)"));
+            Assert.That(Flat(sql), Does.Contain("WHERE STG.[__S1Rank] = 1"));
         });
     }
 
@@ -250,14 +260,14 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Contain("WHEN MATCHED AND source.[__S1Deleted] = 1 THEN" + Environment.NewLine + "    DELETE"));
-            Assert.That(sql, Does.Contain(
-                "WHEN MATCHED AND EXISTS (SELECT CAST(source.[Name] AS VARBINARY(MAX)), source.[Age] " +
-                "EXCEPT SELECT CAST(target.[Name] AS VARBINARY(MAX)), target.[Age]) THEN"));
-            Assert.That(sql, Does.Contain("target.[Name] = source.[Name]"));
-            Assert.That(sql, Does.Not.Contain("target.[Id] = source.[Id],"));
-            Assert.That(sql, Does.Contain("WHEN NOT MATCHED BY TARGET AND source.[__S1Deleted] = 0 THEN"));
-            Assert.That(sql, Does.Contain("INSERT ([Id], [Name], [Age])"));
+            Assert.That(Flat(sql), Does.Contain("WHEN MATCHED AND (SRC.[__S1Deleted] = 1) THEN DELETE WHEN MATCHED AND (EXISTS ("));
+            Assert.That(Flat(sql), Does.Contain(
+                "(EXISTS (SELECT CAST(SRC.[Name] AS VARBINARY(MAX)), SRC.[Age] " +
+                "EXCEPT SELECT CAST(DST.[Name] AS VARBINARY(MAX)), DST.[Age])) THEN UPDATE SET DST.[Name] = SRC.[Name], DST.[Age] = SRC.[Age] WHEN NOT"));
+            Assert.That(Flat(sql), Does.EndWith("VALUES (SRC.[Id], SRC.[Name], SRC.[Age]);"));
+            Assert.That(Flat(sql), Does.Not.Contain("DST.[Id] = SRC.[Id],"));
+            Assert.That(Flat(sql), Does.Contain("WHEN NOT MATCHED BY TARGET AND (SRC.[__S1Deleted] = 0) THEN INSERT ([Id], [Name], [Age]) VALUES"));
+            Assert.That(Flat(sql), Does.Contain("INSERT ([Id], [Name], [Age])"));
         });
     }
 
@@ -277,14 +287,14 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Not.Contain("DELETE"));
-            Assert.That(sql, Does.Contain("(source.[__S1Deleted] = 1 AND target.[UsersDeleted] IS NULL)"));
-            Assert.That(sql, Does.Contain("OR (source.[__S1Deleted] = 0 AND (target.[UsersDeleted] IS NOT NULL OR EXISTS ("));
-            Assert.That(sql, Does.Contain(
-                "target.[Name] = CASE WHEN source.[__S1Deleted] = 1 THEN target.[Name] ELSE source.[Name] END"));
-            Assert.That(sql, Does.Contain(
-                "target.[UsersDeleted] = CASE WHEN source.[__S1Deleted] = 1 THEN SYSUTCDATETIME() ELSE NULL END"));
-            Assert.That(sql, Does.Contain("INSERT ([Id], [Name])"));
+            Assert.That(Flat(sql), Does.Not.Contain("DELETE"));
+            Assert.That(Flat(sql), Does.Contain("(SRC.[__S1Deleted] = 1 AND DST.[UsersDeleted] IS NULL)"));
+            Assert.That(Flat(sql), Does.Contain("OR (SRC.[__S1Deleted] = 0 AND (DST.[UsersDeleted] IS NOT NULL OR EXISTS ("));
+            Assert.That(Flat(sql), Does.Contain(
+                "DST.[Name] = CASE WHEN SRC.[__S1Deleted] = 1 THEN DST.[Name] ELSE SRC.[Name] END"));
+            Assert.That(Flat(sql), Does.Contain(
+                "DST.[UsersDeleted] = CASE WHEN SRC.[__S1Deleted] = 1 THEN SYSUTCDATETIME() ELSE NULL END"));
+            Assert.That(Flat(sql), Does.Contain("INSERT ([Id], [Name])"));
         });
     }
 
@@ -304,7 +314,7 @@ public class SqlStatementBuilderTests
             "[dbo].[Users]", "#S1_Users", columns, new List<string> { "Id" }, softDeleteColumn);
 
         //Assert
-        Assert.That(sql, Does.Not.Contain("NOT MATCHED BY SOURCE"));
+        Assert.That(Flat(sql), Does.Not.Contain("NOT MATCHED BY SOURCE"));
     }
 
     /// <summary>
@@ -323,9 +333,9 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(sql, Does.Not.Contain("UPDATE SET"));
-            Assert.That(sql, Does.Not.Contain("EXCEPT"));
-            Assert.That(sql, Does.Contain("INSERT ([GroupId], [MemberId])"));
+            Assert.That(Flat(sql), Does.Not.Contain("UPDATE SET"));
+            Assert.That(Flat(sql), Does.Not.Contain("EXCEPT"));
+            Assert.That(Flat(sql), Does.Contain("INSERT ([GroupId], [MemberId])"));
         });
     }
 
@@ -334,12 +344,12 @@ public class SqlStatementBuilderTests
     /// </summary>
     /// <param name="baseType">The system type of the compared column.</param>
     /// <param name="expected">The expression expected for the source side.</param>
-    [TestCase("XML", "CAST(CAST(source.[Data] AS NVARCHAR(MAX)) AS VARBINARY(MAX))")]
-    [TestCase("NTEXT", "CAST(CAST(source.[Data] AS NVARCHAR(MAX)) AS VARBINARY(MAX))")]
-    [TestCase("TEXT", "CAST(CAST(source.[Data] AS VARCHAR(MAX)) AS VARBINARY(MAX))")]
-    [TestCase("IMAGE", "CAST(source.[Data] AS VARBINARY(MAX))")]
-    [TestCase("VARCHAR", "CAST(source.[Data] AS VARBINARY(MAX))")]
-    [TestCase("DATETIME2", "SELECT source.[Data] EXCEPT")]
+    [TestCase("XML", "CAST(CAST(SRC.[Data] AS NVARCHAR(MAX)) AS VARBINARY(MAX))")]
+    [TestCase("NTEXT", "CAST(CAST(SRC.[Data] AS NVARCHAR(MAX)) AS VARBINARY(MAX))")]
+    [TestCase("TEXT", "CAST(CAST(SRC.[Data] AS VARCHAR(MAX)) AS VARBINARY(MAX))")]
+    [TestCase("IMAGE", "CAST(SRC.[Data] AS VARBINARY(MAX))")]
+    [TestCase("VARCHAR", "CAST(SRC.[Data] AS VARBINARY(MAX))")]
+    [TestCase("DATETIME2", "SELECT SRC.[Data] EXCEPT")]
     public void BuildMerge_ChangeDetection_ConvertsByType(string baseType, string expected)
     {
         //Arrange
@@ -350,7 +360,7 @@ public class SqlStatementBuilderTests
             "[dbo].[Users]", "#S1_Users", columns, new List<string> { "Id" }, null);
 
         //Assert
-        Assert.That(sql, Does.Contain(expected));
+        Assert.That(Flat(sql), Does.Contain(expected));
     }
 
     /// <summary>
@@ -408,15 +418,15 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(schema, Does.Contain("OBJECT_ID(@TableName)"));
-            Assert.That(schema, Does.Contain("TYPE_NAME(c.system_type_id)"));
-            Assert.That(schema, Does.Contain("c.collation_name"));
-            Assert.That(schema, Does.Contain("c.is_computed = 0"));
-            Assert.That(schema, Does.Contain("c.is_identity = 0"));
-            Assert.That(schema, Does.Contain("c.generated_always_type = 0"));
-            Assert.That(schema, Does.Contain("<> 'timestamp'"));
-            Assert.That(indexes, Does.Contain("OBJECT_ID(@TableName)"));
-            Assert.That(indexes, Does.Contain("i.is_unique = 1"));
+            Assert.That(Flat(schema), Does.Contain("OBJECT_ID(@TableName)"));
+            Assert.That(Flat(schema), Does.Contain("TYPE_NAME(COL.[system_type_id])"));
+            Assert.That(Flat(schema), Does.Contain("COL.[collation_name]"));
+            Assert.That(Flat(schema), Does.Contain("COL.[is_computed] = 0"));
+            Assert.That(Flat(schema), Does.Contain("COL.[is_identity] = 0"));
+            Assert.That(Flat(schema), Does.Contain("COL.[generated_always_type] = 0"));
+            Assert.That(Flat(schema), Does.Contain("<> 'timestamp'"));
+            Assert.That(Flat(indexes), Does.Contain("OBJECT_ID(@TableName)"));
+            Assert.That(Flat(indexes), Does.Contain("IDX.[is_unique] = 1"));
         });
     }
 
@@ -480,8 +490,8 @@ public class SqlStatementBuilderTests
         //Assert
         Assert.Multiple(() =>
         {
-            Assert.That(truncate, Is.EqualTo("TRUNCATE TABLE [#S1_Users];"));
-            Assert.That(drop, Is.EqualTo(
+            Assert.That(Flat(truncate), Is.EqualTo("TRUNCATE TABLE [#S1_Users];"));
+            Assert.That(Flat(drop), Is.EqualTo(
                 "IF OBJECT_ID(N'tempdb..#S1_Us''ers') IS NOT NULL DROP TABLE [#S1_Us'ers];"));
         });
     }

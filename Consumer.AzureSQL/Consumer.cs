@@ -40,7 +40,13 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
     private const int DeadlockErrorNumber = 1205;
 
     /// <summary>
-    /// Number of times a batch is merged before a deadlock is reported as a failure.
+    /// SQL Server error numbers reported when an insert collides with a key another session
+    /// inserted first: a violated primary key or unique constraint, and a violated unique index.
+    /// </summary>
+    private static readonly int[] DuplicateKeyErrorNumbers = [2627, 2601];
+
+    /// <summary>
+    /// Number of times a batch is merged before a deadlock or a key collision is reported as a failure.
     /// </summary>
     private const int MaxMergeAttempts = 3;
 
@@ -648,7 +654,7 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
 
     /// <summary>
     /// Applies the staged batch to the target, repeating the statement when the session is chosen
-    /// as a deadlock victim.
+    /// as a deadlock victim or another session inserted one of the staged keys first.
     /// </summary>
     /// <param name="cancellationToken">A token to signal cancellation.</param>
     /// <returns>The number of target rows inserted, updated or deleted.</returns>
@@ -663,17 +669,31 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
                     _configuration!.CommandTimeoutSeconds,
                     cancellationToken).ConfigureAwait(false);
             }
-            catch (SqlException ex) when (ex.Number == DeadlockErrorNumber && attempt < MaxMergeAttempts)
+            catch (SqlException ex) when (attempt < MaxMergeAttempts && IsRepeatable(ex))
             {
                 Logger.LogWarning(
-                    "Batch merge into '{TableName}' was chosen as a deadlock victim; attempt {Attempt} of {Max}.",
+                    "Batch merge into '{TableName}' failed with error {Number} and is repeated; attempt {Attempt} of {Max}.",
                     _configuration!.TableName,
+                    ex.Number,
                     attempt,
                     MaxMergeAttempts);
 
                 await Task.Delay(TimeSpan.FromMilliseconds(250 * attempt), cancellationToken).ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Determines whether a failed batch merge can be repeated with the same staged rows.
+    /// </summary>
+    /// <param name="exception">The failure reported by the server.</param>
+    /// <returns>
+    /// <c>true</c> for a deadlock and for a duplicate key, both of which leave the target and the
+    /// staging table as they were before the statement; otherwise <c>false</c>.
+    /// </returns>
+    private static bool IsRepeatable(SqlException exception)
+    {
+        return exception.Number == DeadlockErrorNumber || DuplicateKeyErrorNumbers.Contains(exception.Number);
     }
 
     /// <summary>

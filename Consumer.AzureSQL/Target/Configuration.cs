@@ -20,7 +20,7 @@ public class Configuration
     /// <summary>
     /// Default number of rows staged before each bulk copy and MERGE.
     /// </summary>
-    public const int DefaultBatchSize = 10000;
+    public const int DefaultBatchSize = 2000;
 
     /// <summary>
     /// Default SQL command timeout, in seconds. Bulk MERGE batches can be long-running.
@@ -94,9 +94,16 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the number of rows staged before each bulk copy and MERGE.
-    /// Larger batches reduce round-trips at the cost of memory and longer-held locks.
-    /// Defaults to <c>10000</c>.
+    /// Defaults to <c>2000</c>.
     /// </summary>
+    /// <remarks>
+    /// A batch locks the target rows it reads until its <c>MERGE</c> completes. Above roughly 3,000
+    /// rows the server replaces those row locks with one exclusive lock on the whole
+    /// table for the duration of the batch, which blocks every other writer of the table and,
+    /// unless the database uses row versioning, its readers. Batches below that size lock
+    /// only the rows they write. A larger value suits a table with a single writer and
+    /// readers on row versioning, or a table whose lock escalation is disabled.
+    /// </remarks>
     public int BatchSize { get; set; } = DefaultBatchSize;
 
     /// <summary>

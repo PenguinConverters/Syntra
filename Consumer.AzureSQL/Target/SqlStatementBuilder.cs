@@ -4,7 +4,7 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL.Target;
 
 /// <summary>
 /// Builds the T-SQL of the bulk synchronization path: the staging table, the statement that
-/// merges a staged batch into the target, and the catalog query describing the target.
+/// merges a staged batch into the target, and the catalog queries describing the target.
 /// </summary>
 /// <remarks>
 /// Every identifier is passed through <see cref="QuoteIdentifier"/> before it reaches statement
@@ -36,6 +36,66 @@ internal static class SqlStatementBuilder
     /// </summary>
     public const int MaxTempTableNameLength = 100;
 
+    /// <summary>
+    /// Separator between the entries of a list that takes one statement line per entry at the
+    /// second indentation level.
+    /// </summary>
+    private const string ListSeparator = ",\n        ";
+
+    /// <summary>
+    /// Query reading the writable columns of the table named by <c>@TableName</c>.
+    /// </summary>
+    private const string TargetSchemaQuery = """
+        SELECT
+            OBJECT_SCHEMA_NAME(COL.[object_id]) As [SchemaName],
+            OBJECT_NAME(COL.[object_id]) As [ObjectName],
+            COL.[name] As [ColumnName],
+            TYPE_NAME(COL.[system_type_id]) As [TypeName],
+            COL.[max_length] As [MaxLength],
+            COL.[precision] As [Precision],
+            COL.[scale] As [Scale],
+            COL.[collation_name] As [CollationName]
+        FROM
+            [sys].[columns] COL
+        WHERE
+            COL.[object_id] = OBJECT_ID(@TableName)
+            AND COL.[is_computed] = 0
+            AND COL.[is_identity] = 0
+            AND COL.[generated_always_type] = 0
+            AND TYPE_NAME(COL.[system_type_id]) <> 'timestamp'
+        ORDER BY
+            COL.[column_id];
+        """;
+
+    /// <summary>
+    /// Query reading the key columns of every usable unique index of the table named by
+    /// <c>@TableName</c>.
+    /// </summary>
+    private const string UniqueIndexQuery = """
+        SELECT
+            IDX.[index_id] As [IndexId],
+            COL.[name] As [ColumnName]
+        FROM
+            [sys].[indexes] IDX
+        JOIN
+            [sys].[index_columns] IXC
+        ON
+            (IXC.[object_id] = IDX.[object_id] AND IXC.[index_id] = IDX.[index_id])
+        JOIN
+            [sys].[columns] COL
+        ON
+            (COL.[object_id] = IXC.[object_id] AND COL.[column_id] = IXC.[column_id])
+        WHERE
+            IDX.[object_id] = OBJECT_ID(@TableName)
+            AND IDX.[is_unique] = 1
+            AND IDX.[is_disabled] = 0
+            AND IDX.[has_filter] = 0
+            AND IXC.[is_included_column] = 0
+        ORDER BY
+            IDX.[index_id],
+            IXC.[key_ordinal];
+        """;
+
     #endregion
 
     #region Methods
@@ -53,7 +113,7 @@ internal static class SqlStatementBuilder
         if (string.IsNullOrWhiteSpace(identifier))
             throw new ArgumentException("Identifier must not be null or empty.", nameof(identifier));
 
-        return string.Concat("[", identifier.Replace("]", "]]"), "]");
+        return $"[{identifier.Replace("]", "]]")}]";
     }
 
     /// <summary>
@@ -64,7 +124,7 @@ internal static class SqlStatementBuilder
     /// <returns>A name such as <c>[dbo].[ADUser]</c>.</returns>
     public static string QuoteObjectName(string schemaName, string objectName)
     {
-        return string.Concat(QuoteIdentifier(schemaName), ".", QuoteIdentifier(objectName));
+        return $"{QuoteIdentifier(schemaName)}.{QuoteIdentifier(objectName)}";
     }
 
     /// <summary>
@@ -112,24 +172,20 @@ internal static class SqlStatementBuilder
         if (columns is null || columns.Count == 0)
             throw new ArgumentException("At least one column is required.", nameof(columns));
 
-        StringBuilder builder = new StringBuilder();
-        builder.Append("CREATE TABLE ").Append(QuoteIdentifier(tempTableName)).AppendLine(" (");
+        string declarations = string.Join(",\n    ", columns.Select(column =>
+            string.IsNullOrWhiteSpace(column.Collation)
+                ? $"{QuoteIdentifier(column.Name)} {column.Declaration} NULL"
+                : $"{QuoteIdentifier(column.Name)} {column.Declaration} COLLATE {column.Collation} NULL"));
 
-        foreach (TargetColumn column in columns)
-        {
-            builder.Append("    ").Append(QuoteIdentifier(column.Name)).Append(' ').Append(column.Declaration);
-
-            if (!string.IsNullOrWhiteSpace(column.Collation))
-                builder.Append(" COLLATE ").Append(column.Collation);
-
-            builder.AppendLine(" NULL,");
-        }
-
-        builder.Append("    ").Append(QuoteIdentifier(DeletedFlagColumn)).AppendLine(" BIT NOT NULL,");
-        builder.Append("    ").Append(QuoteIdentifier(SequenceColumn)).AppendLine(" BIGINT NOT NULL");
-        builder.Append(");");
-
-        return builder.ToString();
+        return $"""
+            CREATE TABLE
+                {QuoteIdentifier(tempTableName)}
+            (
+                {declarations},
+                {QuoteIdentifier(DeletedFlagColumn)} BIT NOT NULL,
+                {QuoteIdentifier(SequenceColumn)} BIGINT NOT NULL
+            );
+            """;
     }
 
     /// <summary>
@@ -141,8 +197,9 @@ internal static class SqlStatementBuilder
     /// key, so a key staged several times in one batch is applied once with its last state.
     /// </para>
     /// <para>
-    /// A matched row is updated only when at least one non-key column differs. The comparison is
-    /// exact: character data is compared by its bytes, independent of collation.
+    /// The match condition compares the primary key columns of target and source directly. A
+    /// matched row is updated only when at least one non-key column differs; that comparison is
+    /// exact, character data being compared by its bytes, independent of collation.
     /// </para>
     /// <para>
     /// A staged deletion removes the matched row when <paramref name="softDeleteColumn"/> is
@@ -151,9 +208,9 @@ internal static class SqlStatementBuilder
     /// clears the column again. A staged deletion with no matching row writes nothing.
     /// </para>
     /// <para>
-    /// The statement touches only rows whose key is staged. It holds a range lock on the target
-    /// for its duration, so concurrent statements against the same target cannot both insert the
-    /// same key.
+    /// The statement carries no table hint. It runs under the isolation level of the session and
+    /// locks only the rows it writes, so statements writing other keys of the same table are not
+    /// blocked.
     /// </para>
     /// </remarks>
     /// <param name="targetObject">The quoted, schema-qualified target table name.</param>
@@ -182,89 +239,50 @@ internal static class SqlStatementBuilder
         HashSet<string> keySet = new HashSet<string>(primaryKeys, StringComparer.OrdinalIgnoreCase);
         List<TargetColumn> updatable = columns.Where(column => !keySet.Contains(column.Name)).ToList();
 
-        string deletedFlag = QuoteIdentifier(DeletedFlagColumn);
+        string deleted = QuoteIdentifier(DeletedFlagColumn);
         string sequence = QuoteIdentifier(SequenceColumn);
         string columnList = string.Join(", ", columns.Select(column => QuoteIdentifier(column.Name)));
+        string sourceList = string.Join(", ", columns.Select(column => $"SRC.{QuoteIdentifier(column.Name)}"));
         string keyList = string.Join(", ", primaryKeys.Select(QuoteIdentifier));
-        string newLine = Environment.NewLine;
-
-        StringBuilder builder = new StringBuilder();
-        builder.Append("MERGE INTO ").Append(targetObject).AppendLine(" WITH (HOLDLOCK) AS target");
-        builder.AppendLine("USING (");
-        builder.Append("    SELECT ").Append(columnList).Append(", ").AppendLine(deletedFlag);
-        builder.AppendLine("      FROM (");
-        builder.Append("        SELECT ").Append(columnList).Append(", ").Append(deletedFlag).AppendLine(",");
-        builder.Append("               ROW_NUMBER() OVER (PARTITION BY ").Append(keyList)
-            .Append(" ORDER BY ").Append(sequence).AppendLine(" DESC) AS [__S1Rank]");
-        builder.Append("          FROM ").AppendLine(QuoteIdentifier(tempTableName));
-        builder.AppendLine("      ) AS staged");
-        builder.AppendLine("     WHERE staged.[__S1Rank] = 1");
-        builder.AppendLine(") AS source");
-
-        builder.Append("    ON ");
-        builder.AppendLine(string.Join(
-            newLine + "   AND ",
-            primaryKeys.Select(key => $"target.{QuoteIdentifier(key)} = source.{QuoteIdentifier(key)}")));
+        string keyMatch = string.Join(" AND ", primaryKeys.Select(key =>
+            $"DST.{QuoteIdentifier(key)} = SRC.{QuoteIdentifier(key)}"));
 
         string? changed = updatable.Count == 0
             ? null
-            : string.Concat(
-                "EXISTS (SELECT ",
-                string.Join(", ", updatable.Select(column => BuildComparable("source", column))),
-                " EXCEPT SELECT ",
-                string.Join(", ", updatable.Select(column => BuildComparable("target", column))),
-                ")");
+            : $"EXISTS (SELECT {string.Join(", ", updatable.Select(column => BuildComparable("SRC", column)))} " +
+              $"EXCEPT SELECT {string.Join(", ", updatable.Select(column => BuildComparable("DST", column)))})";
 
-        if (softDeleteColumn is null)
-        {
-            builder.Append("WHEN MATCHED AND source.").Append(deletedFlag).AppendLine(" = 1 THEN");
-            builder.AppendLine("    DELETE");
+        string matched = softDeleteColumn is null
+            ? BuildMatchedForHardDelete(updatable, deleted, changed)
+            : BuildMatchedForSoftDelete(updatable, deleted, changed, QuoteIdentifier(softDeleteColumn));
 
-            if (changed is not null)
-            {
-                builder.Append("WHEN MATCHED AND ").Append(changed).AppendLine(" THEN");
-                builder.Append("    UPDATE SET ");
-                builder.AppendLine(string.Join(
-                    "," + newLine + "               ",
-                    updatable.Select(column =>
-                        $"target.{QuoteIdentifier(column.Name)} = source.{QuoteIdentifier(column.Name)}")));
-            }
-        }
-        else
-        {
-            string softDelete = QuoteIdentifier(softDeleteColumn);
-            string reinstated = changed is null
-                ? $"target.{softDelete} IS NOT NULL"
-                : $"(target.{softDelete} IS NOT NULL OR {changed})";
-
-            builder.AppendLine("WHEN MATCHED AND (");
-            builder.Append("        (source.").Append(deletedFlag).Append(" = 1 AND target.")
-                .Append(softDelete).AppendLine(" IS NULL)");
-            builder.Append("     OR (source.").Append(deletedFlag).Append(" = 0 AND ")
-                .Append(reinstated).AppendLine(")) THEN");
-            builder.Append("    UPDATE SET ");
-
-            List<string> assignments = updatable
-                .Select(column => string.Concat(
-                    "target.", QuoteIdentifier(column.Name),
-                    " = CASE WHEN source.", deletedFlag, " = 1 THEN target.", QuoteIdentifier(column.Name),
-                    " ELSE source.", QuoteIdentifier(column.Name), " END"))
-                .ToList();
-
-            assignments.Add(string.Concat(
-                "target.", softDelete,
-                " = CASE WHEN source.", deletedFlag, " = 1 THEN SYSUTCDATETIME() ELSE NULL END"));
-
-            builder.AppendLine(string.Join("," + newLine + "               ", assignments));
-        }
-
-        builder.Append("WHEN NOT MATCHED BY TARGET AND source.").Append(deletedFlag).AppendLine(" = 0 THEN");
-        builder.Append("    INSERT (").Append(columnList).AppendLine(")");
-        builder.Append("    VALUES (")
-            .Append(string.Join(", ", columns.Select(column => $"source.{QuoteIdentifier(column.Name)}")))
-            .Append(");");
-
-        return builder.ToString();
+        return $"""
+            MERGE INTO
+                {targetObject} DST
+            USING
+                (
+                    SELECT
+                        {columnList}, {deleted}
+                    FROM
+                        (
+                            SELECT
+                                {columnList}, {deleted},
+                                ROW_NUMBER() OVER (PARTITION BY {keyList} ORDER BY {sequence} DESC) As [__S1Rank]
+                            FROM
+                                {QuoteIdentifier(tempTableName)}
+                        ) As STG
+                    WHERE
+                        STG.[__S1Rank] = 1
+                ) As SRC
+            ON
+                ({keyMatch})
+            {matched}
+            WHEN NOT MATCHED BY TARGET AND (SRC.{deleted} = 0)
+                THEN INSERT
+                    ({columnList})
+                VALUES
+                    ({sourceList});
+            """;
     }
 
     /// <summary>
@@ -280,23 +298,7 @@ internal static class SqlStatementBuilder
     /// <returns>The parameterised catalog query.</returns>
     public static string BuildTargetSchemaQuery()
     {
-        return """
-            SELECT OBJECT_SCHEMA_NAME(c.object_id) AS SchemaName,
-                   OBJECT_NAME(c.object_id)        AS ObjectName,
-                   c.name                          AS ColumnName,
-                   TYPE_NAME(c.system_type_id)     AS TypeName,
-                   c.max_length                    AS MaxLength,
-                   c.precision                     AS Precision,
-                   c.scale                         AS Scale,
-                   c.collation_name                AS CollationName
-              FROM sys.columns AS c
-             WHERE c.object_id = OBJECT_ID(@TableName)
-               AND c.is_computed = 0
-               AND c.is_identity = 0
-               AND c.generated_always_type = 0
-               AND TYPE_NAME(c.system_type_id) <> 'timestamp'
-             ORDER BY c.column_id;
-            """;
+        return TargetSchemaQuery;
     }
 
     /// <summary>
@@ -310,23 +312,7 @@ internal static class SqlStatementBuilder
     /// <returns>The parameterised catalog query.</returns>
     public static string BuildUniqueIndexQuery()
     {
-        return """
-            SELECT i.index_id AS IndexId,
-                   c.name     AS ColumnName
-              FROM sys.indexes AS i
-              JOIN sys.index_columns AS ic
-                ON ic.object_id = i.object_id
-               AND ic.index_id = i.index_id
-              JOIN sys.columns AS c
-                ON c.object_id = ic.object_id
-               AND c.column_id = ic.column_id
-             WHERE i.object_id = OBJECT_ID(@TableName)
-               AND i.is_unique = 1
-               AND i.is_disabled = 0
-               AND i.has_filter = 0
-               AND ic.is_included_column = 0
-             ORDER BY i.index_id, ic.key_ordinal;
-            """;
+        return UniqueIndexQuery;
     }
 
     /// <summary>
@@ -383,7 +369,10 @@ internal static class SqlStatementBuilder
     /// <returns>The <c>TRUNCATE TABLE</c> statement.</returns>
     public static string BuildTruncate(string tempTableName)
     {
-        return $"TRUNCATE TABLE {QuoteIdentifier(tempTableName)};";
+        return $"""
+            TRUNCATE TABLE
+                {QuoteIdentifier(tempTableName)};
+            """;
     }
 
     /// <summary>
@@ -393,8 +382,75 @@ internal static class SqlStatementBuilder
     /// <returns>The guarded <c>DROP TABLE</c> statement.</returns>
     public static string BuildDropTempTableIfExists(string tempTableName)
     {
-        string literal = tempTableName.Replace("'", "''");
-        return $"IF OBJECT_ID(N'tempdb..{literal}') IS NOT NULL DROP TABLE {QuoteIdentifier(tempTableName)};";
+        return $"""
+            IF OBJECT_ID(N'tempdb..{tempTableName.Replace("'", "''")}') IS NOT NULL
+                DROP TABLE
+                    {QuoteIdentifier(tempTableName)};
+            """;
+    }
+
+    /// <summary>
+    /// Builds the <c>WHEN MATCHED</c> clauses for a target whose rows are deleted physically.
+    /// </summary>
+    /// <param name="updatable">The staged non-key columns.</param>
+    /// <param name="deleted">The quoted deletion flag column.</param>
+    /// <param name="changed">The change-detection predicate, or <c>null</c> when there is nothing to update.</param>
+    /// <returns>A delete clause, followed by an update clause when there are columns to update.</returns>
+    private static string BuildMatchedForHardDelete(List<TargetColumn> updatable, string deleted, string? changed)
+    {
+        string delete = $"""
+            WHEN MATCHED AND (SRC.{deleted} = 1) THEN
+                DELETE
+            """;
+
+        if (changed is null)
+            return delete;
+
+        string assignments = string.Join(ListSeparator, updatable.Select(column =>
+            $"DST.{QuoteIdentifier(column.Name)} = SRC.{QuoteIdentifier(column.Name)}"));
+
+        return $"""
+            {delete}
+            WHEN MATCHED AND ({changed}) THEN
+                UPDATE SET
+                    {assignments}
+            """;
+    }
+
+    /// <summary>
+    /// Builds the <c>WHEN MATCHED</c> clause for a target that records deletions in a column.
+    /// </summary>
+    /// <param name="updatable">The staged non-key columns.</param>
+    /// <param name="deleted">The quoted deletion flag column.</param>
+    /// <param name="changed">The change-detection predicate, or <c>null</c> when there is nothing to update.</param>
+    /// <param name="softDelete">The quoted target column recording the deletion time.</param>
+    /// <returns>
+    /// One update clause that stamps an unmarked row for a staged deletion, and writes the staged
+    /// values and clears the mark for a staged non-deletion that differs or is marked.
+    /// </returns>
+    private static string BuildMatchedForSoftDelete(
+        List<TargetColumn> updatable,
+        string deleted,
+        string? changed,
+        string softDelete)
+    {
+        string reinstated = changed is null
+            ? $"DST.{softDelete} IS NOT NULL"
+            : $"(DST.{softDelete} IS NOT NULL OR {changed})";
+
+        List<string> assignments = updatable
+            .Select(column =>
+                $"DST.{QuoteIdentifier(column.Name)} = CASE WHEN SRC.{deleted} = 1 " +
+                $"THEN DST.{QuoteIdentifier(column.Name)} ELSE SRC.{QuoteIdentifier(column.Name)} END")
+            .ToList();
+
+        assignments.Add($"DST.{softDelete} = CASE WHEN SRC.{deleted} = 1 THEN SYSUTCDATETIME() ELSE NULL END");
+
+        return $"""
+            WHEN MATCHED AND ((SRC.{deleted} = 1 AND DST.{softDelete} IS NULL) OR (SRC.{deleted} = 0 AND {reinstated})) THEN
+                UPDATE SET
+                    {string.Join(ListSeparator, assignments)}
+            """;
     }
 
     /// <summary>
