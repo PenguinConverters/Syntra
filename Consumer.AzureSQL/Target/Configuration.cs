@@ -20,7 +20,7 @@ public class Configuration
     /// <summary>
     /// Default number of rows staged before each bulk copy and MERGE.
     /// </summary>
-    public const int DefaultBatchSize = 10000;
+    public const int DefaultBatchSize = 2000;
 
     /// <summary>
     /// Default SQL command timeout, in seconds. Bulk MERGE batches can be long-running.
@@ -31,6 +31,11 @@ public class Configuration
     /// Default name of the soft-delete column when <see cref="HasDeletedColumn"/> is set.
     /// </summary>
     public const string DefaultDeletedColumnName = "Deleted";
+
+    /// <summary>
+    /// Default largest share of rows, in percent, that one reconciliation may remove.
+    /// </summary>
+    public const int DefaultThreshold = 10;
 
     #endregion
 
@@ -48,17 +53,15 @@ public class Configuration
     public string? TableName { get; set; }
 
     /// <summary>
-    /// Gets or sets the unique name of this synchronization configuration, for example
-    /// <c>ActiveDirectory.groups2AzureSQL.ADGroup_DELTA</c>.
+    /// Gets or sets the name identifying the synchronization this consumer runs for, as given by
+    /// <c>ObjectNamespace</c> at the root of the job configuration.
     /// </summary>
     /// <remarks>
-    /// The staging table name is derived from this, so it identifies the run rather than the
-    /// destination. Several configurations may target the same table — a full and a delta sync of
-    /// the same entity, or two sources feeding one table — and each needs its own staging area.
-    /// Only one run of a given configuration is expected at a time, which is what makes the name
-    /// safe to reuse. Falls back to <see cref="TableName"/> when not supplied.
+    /// The staging table is named after this value. The host supplies it and guarantees that only
+    /// one run carrying a given name is active at a time. When it is empty the staging table is
+    /// named after <see cref="TableName"/>.
     /// </remarks>
-    public string? ConfigurationName { get; set; }
+    public string? ObjectNamespace { get; set; }
 
     /// <summary>
     /// Gets or sets the column definitions for the target table.
@@ -73,10 +76,44 @@ public class Configuration
     public List<string>? PrimaryKeys { get; set; }
 
     /// <summary>
-    /// Gets or sets the deletion threshold as a percentage (0-100).
-    /// Prevents mass deletions during full sync by aborting when
-    /// the deletion count exceeds this threshold of existing rows.
+    /// Gets or sets a value indicating whether a full synchronization removes the target rows
+    /// whose key the source no longer returns.
     /// </summary>
+    /// <remarks>
+    /// Applies only when <see cref="Delta"/> is <c>false</c>, the source stream was read to its
+    /// end and no error was recorded. The rows are deleted, or stamped in the soft-delete column
+    /// when <see cref="HasDeletedColumn"/> is set. <see cref="DeletionConstraints"/> limits which
+    /// rows are considered and <see cref="Threshold"/> limits how many may be removed.
+    /// </remarks>
+    public bool ReconcileDeletions { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the run is a delta synchronization, as given by
+    /// <c>Delta</c> at the root of the job configuration.
+    /// </summary>
+    /// <remarks>
+    /// A delta synchronization returns only what changed, so the keys it does not return say
+    /// nothing about what was deleted and no reconciliation takes place.
+    /// </remarks>
+    public bool Delta { get; set; }
+
+    /// <summary>
+    /// Gets or sets the column values a target row must carry to take part in reconciliation.
+    /// Keys are target column names; a <c>null</c> value selects rows where the column is null.
+    /// </summary>
+    /// <remarks>
+    /// Required when several synchronizations write the same table: each one names the values
+    /// that mark its own rows, so that it never removes the rows of another.
+    /// </remarks>
+    public Dictionary<string, string?>? DeletionConstraints { get; set; }
+
+    /// <summary>
+    /// Gets or sets the largest share of the rows in scope, as a percentage from 0 to 100, that
+    /// one reconciliation may remove. Defaults to <c>10</c> when not set.
+    /// </summary>
+    /// <remarks>
+    /// When more rows would be removed, none is, and the run is recorded as failed.
+    /// </remarks>
     public int? Threshold { get; set; }
 
     /// <summary>
@@ -96,9 +133,16 @@ public class Configuration
 
     /// <summary>
     /// Gets or sets the number of rows staged before each bulk copy and MERGE.
-    /// Larger batches reduce round-trips at the cost of memory and longer-held locks.
-    /// Defaults to <c>10000</c>.
+    /// Defaults to <c>2000</c>.
     /// </summary>
+    /// <remarks>
+    /// A batch locks the target rows it reads until its <c>MERGE</c> completes. Above roughly 3,000
+    /// rows the server replaces those row locks with one exclusive lock on the whole
+    /// table for the duration of the batch, which blocks every other writer of the table and,
+    /// unless the database uses row versioning, its readers. Batches below that size lock
+    /// only the rows they write. A larger value suits a table with a single writer and
+    /// readers on row versioning, or a table whose lock escalation is disabled.
+    /// </remarks>
     public int BatchSize { get; set; } = DefaultBatchSize;
 
     /// <summary>

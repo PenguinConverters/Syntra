@@ -427,7 +427,8 @@ When the target system tolerates concurrent writes, drive the provider stream wi
 `Parallel.ForEachAsync` instead of `await foreach`. `UpdateEntityAsync` already matches
 the `Func<T, CancellationToken, ValueTask>` body signature, so it can be passed directly.
 Bound the concurrency with the connector's `MaxDegreeOfParallelism` setting and keep any
-shared state in a concurrent collection — this is what `Consumer.AzureSQL` does:
+shared state in a concurrent collection. `Consumer.AzureSQL` does not work this way: it
+stages rows in batches and applies each batch with one set-based statement.
 
 ```csharp
 public override async Task SynchronizeAsync(
@@ -486,12 +487,15 @@ Target:
     Value: "BASE64_ENCRYPTED"
     Protected: true
   PrimaryKeys:
-    id: "id"
-  Columns:
     - id
-    - displayName
-    - email
-    - department
-Trigger:
-  Crontab: "0 2 * * *"
+  Columns:
+    id: {}
+    displayName: {}
+    email: {}
+    department: {}
+Schedule: "0 2 * * *"
 ```
+
+The host reads only `Type` from the `Source` and `Target` sections. Each section is handed to
+its connector complete and as written, so every property of the connector's configuration class
+can be set there, and a key the class does not have is ignored.

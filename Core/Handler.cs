@@ -238,8 +238,18 @@ public class Handler
         }
     }
 
+    /// <summary>
+    /// Serializes the target section for the consumer, carrying whether the run is a delta
+    /// synchronization and, when the section does not set one itself, the name of the synchronization.
+    /// </summary>
+    /// <returns>The serialized target configuration, or <c>null</c> when it cannot be serialized.</returns>
     private byte[]? SerializeTargetConfiguration()
     {
+        if (string.IsNullOrWhiteSpace(_configuration.Target.ObjectNamespace))
+            _configuration.Target.ObjectNamespace = _configuration.ObjectNamespace;
+
+        _configuration.Target.Delta = _configuration.Delta;
+
         try
         {
             return JsonSerializerExtensions.Serialize(_configuration.Target);

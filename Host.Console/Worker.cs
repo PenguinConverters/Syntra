@@ -65,65 +65,78 @@ public class Worker
         IDeserializer deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .WithCaseInsensitivePropertyMatching()
+            .IgnoreUnmatchedProperties()
             .Build();
 
         SyncConfiguration configuration = deserializer.Deserialize<SyncConfiguration>(yamlContent);
 
-        if (configuration?.Source is null)
+        string objectNamespace = string.IsNullOrWhiteSpace(configuration?.ObjectNamespace)
+            ? Path.GetFileNameWithoutExtension(_configurationPath)
+            : configuration.ObjectNamespace;
+
+        ConnectorSection? source = ConnectorSection.Read(yamlContent, "source");
+        ConnectorSection? target = _schemaMode
+            ? ConnectorSection.ForType("PenguinConverters.Syntra.Consumer.SchemaDesigner")
+            : ConnectorSection.Read(yamlContent, "target", objectNamespace);
+
+        if (source is null)
         {
             throw new InvalidOperationException("Configuration must contain a 'source' section.");
         }
 
-        if (configuration.Target is null && !_schemaMode)
+        if (target is null)
         {
             throw new InvalidOperationException("Configuration must contain a 'target' section unless running in --schema mode.");
         }
 
-        _logger.LogInformation("Source type: {SourceType}", configuration.Source.Type);
+        _logger.LogInformation("Source type: {SourceType}", source.Type);
+        _logger.LogInformation("Target type: {TargetType}", target.Type);
 
-        // Build YAML deserializer function for connector configuration
         Func<byte[], Type, object> yamlDeserializerFunc = (bytes, type) =>
         {
             string yaml = Encoding.UTF8.GetString(bytes);
             IDeserializer yamlDeserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithCaseInsensitivePropertyMatching()
+                .IgnoreUnmatchedProperties()
                 .Build();
             return yamlDeserializer.Deserialize(yaml, type)!;
         };
 
         // The key opens every protected value in this configuration, so it is held for the whole run
         // and disposed with it.
-        using Decryptor? decryptor = configuration.Keyra?.CreateDecryptor();
+        using Decryptor? decryptor = configuration?.Keyra?.CreateDecryptor();
 
         if (decryptor is not null)
         {
             _logger.LogInformation("Opened Keyra key {KeyId} for credential disclosure", decryptor.KeyId);
         }
 
-        // Build provider
-        IProvider provider = BuildProvider(configuration.Source, yamlDeserializerFunc, decryptor);
-
-        // Build consumer
-        IConsumer consumer;
         if (_schemaMode)
         {
             _logger.LogInformation("Running in SchemaDesigner mode");
-            consumer = BuildConsumer(
-                new TargetConfiguration { Type = "PenguinConverters.Syntra.Consumer.SchemaDesigner" },
-                yamlDeserializerFunc,
-                decryptor);
-        }
-        else
-        {
-            _logger.LogInformation("Target type: {TargetType}", configuration.Target!.Type);
-            consumer = BuildConsumer(configuration.Target, yamlDeserializerFunc, decryptor);
         }
 
-        // Run synchronization
+        IProvider provider = BuildProvider(source, yamlDeserializerFunc, decryptor);
+        IConsumer consumer = BuildConsumer(target, yamlDeserializerFunc, decryptor);
+
         _logger.LogInformation("Starting synchronization");
-        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
-        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await ReleaseAsync(provider).ConfigureAwait(false);
+                await ReleaseAsync(consumer).ConfigureAwait(false);
+            }
+        }
 
         if (consumer.HadErrors)
         {
@@ -136,12 +149,42 @@ public class Worker
     }
 
     /// <summary>
+    /// Releases a connector that holds resources, whichever disposal contract it implements.
+    /// </summary>
+    /// <param name="connector">The connector to release.</param>
+    /// <returns>A task that completes when the connector has been released.</returns>
+    private async ValueTask ReleaseAsync(object connector)
+    {
+        try
+        {
+            switch (connector)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to release {Connector}.", connector.GetType().Name);
+        }
+    }
+
+    /// <summary>
     /// Builds a provider instance by dynamically loading the connector assembly.
     /// </summary>
+    /// <param name="section">The source section of the job configuration.</param>
+    /// <param name="deserializer">The function the connector deserializes its configuration with.</param>
+    /// <param name="decryptor">The decryptor for protected configuration values, if a key is configured.</param>
+    /// <returns>The provider, configured from the complete section.</returns>
     private IProvider BuildProvider(
-        SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
+        ConnectorSection section, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
-        string assemblyName = sourceConfig.Type;
+        string assemblyName = section.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
 
         Type builderType = assembly.GetTypes()
@@ -150,13 +193,7 @@ public class Worker
 
         IProviderBuilder providerBuilder = (IProviderBuilder)Activator.CreateInstance(builderType)!;
 
-        byte[] configBytes = Encoding.UTF8.GetBytes(
-            new SerializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build()
-                .Serialize(sourceConfig));
-
-        providerBuilder.AddConfiguration(configBytes);
+        providerBuilder.AddConfiguration(section.Content);
         providerBuilder.AddMetadata(null);
         providerBuilder.AddDeserializer(deserializer);
         providerBuilder.AddLogger(_logger);
@@ -170,10 +207,14 @@ public class Worker
     /// <summary>
     /// Builds a consumer instance by dynamically loading the connector assembly.
     /// </summary>
+    /// <param name="section">The target section of the job configuration.</param>
+    /// <param name="deserializer">The function the connector deserializes its configuration with.</param>
+    /// <param name="decryptor">The decryptor for protected configuration values, if a key is configured.</param>
+    /// <returns>The consumer, configured from the complete section.</returns>
     private IConsumer BuildConsumer(
-        TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
+        ConnectorSection section, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
-        string assemblyName = targetConfig.Type;
+        string assemblyName = section.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
 
         Type builderType = assembly.GetTypes()
@@ -182,13 +223,7 @@ public class Worker
 
         IConsumerBuilder consumerBuilder = (IConsumerBuilder)Activator.CreateInstance(builderType)!;
 
-        byte[] configBytes = Encoding.UTF8.GetBytes(
-            new SerializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build()
-                .Serialize(targetConfig));
-
-        consumerBuilder.AddConfiguration(configBytes);
+        consumerBuilder.AddConfiguration(section.Content);
         consumerBuilder.AddMetadata(null);
         consumerBuilder.AddDeserializer(deserializer);
         consumerBuilder.AddLogger(_logger);
@@ -210,14 +245,10 @@ internal class SyncConfiguration
     #region Properties
 
     /// <summary>
-    /// Gets or sets the source provider configuration.
+    /// Gets or sets the name identifying this synchronization. The configuration file name
+    /// stands in when it is not set.
     /// </summary>
-    public SourceConfiguration? Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the target consumer configuration.
-    /// </summary>
-    public TargetConfiguration? Target { get; set; }
+    public string? ObjectNamespace { get; set; }
 
     /// <summary>
     /// Gets or sets the Keyra vault key location used to disclose protected configuration values.

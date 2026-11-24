@@ -20,7 +20,7 @@
     and PenguinConverters.CandyStore arrive transitively. See NOTICE and .github/CONTRIBUTING.md.
   -->
   <ItemGroup>
-    <PackageReference Include="PenguinConverters.Keyra" Version="3.5.*" />
+    <PackageReference Include="PenguinConverters.Keyra" Version="3.5.0.*" />
   </ItemGroup>
 
 </Project>

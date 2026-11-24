@@ -110,6 +110,7 @@ public class Worker : IHostedService, IDisposable
                 IDeserializer deserializer = new DeserializerBuilder()
                     .WithNamingConvention(CamelCaseNamingConvention.Instance)
                     .WithCaseInsensitivePropertyMatching()
+                    .IgnoreUnmatchedProperties()
                     .Build();
 
                 ServiceSyncConfiguration config = deserializer.Deserialize<ServiceSyncConfiguration>(content);
@@ -134,6 +135,8 @@ public class Worker : IHostedService, IDisposable
                     Name = name,
                     ConfigurationPath = configFile,
                     Configuration = config,
+                    Source = ConnectorSection.Read(content, "source"),
+                    Target = ConnectorSection.Read(content, "target", name),
                     CronSchedule = schedule,
                     LeaseFilePath = Path.Combine(_configurationDirectory, $".{ToLeaseFileName(name)}.lease")
                 });
@@ -235,37 +238,46 @@ public class Worker : IHostedService, IDisposable
             IDeserializer deserializer = new DeserializerBuilder()
                 .WithNamingConvention(CamelCaseNamingConvention.Instance)
                 .WithCaseInsensitivePropertyMatching()
+                .IgnoreUnmatchedProperties()
                 .Build();
             return deserializer.Deserialize(yaml, type)!;
         };
 
         ServiceSyncConfiguration config = job.Configuration;
 
-        if (config.Source is null)
+        if (job.Source is null)
         {
             _logger.LogError("Job '{Name}' has no source configuration", job.Name);
             return;
         }
 
-        if (config.Target is null)
+        if (job.Target is null)
         {
             _logger.LogError("Job '{Name}' has no target configuration", job.Name);
             return;
         }
 
-        // The key opens every protected value in this job's configuration, so it is held for the run
-        // and disposed with it rather than kept alive between scheduled executions.
         using Decryptor? decryptor = config.Keyra?.CreateDecryptor();
 
-        // Build provider
-        IProvider provider = BuildProvider(config.Source, yamlDeserializerFunc, decryptor);
+        IProvider provider = BuildProvider(job.Source, yamlDeserializerFunc, decryptor);
+        IConsumer consumer = BuildConsumer(job.Target, yamlDeserializerFunc, decryptor);
 
-        // Build consumer
-        IConsumer consumer = BuildConsumer(config.Target, yamlDeserializerFunc, decryptor);
-
-        // Run synchronization
-        await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
-        await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await consumer.SynchronizeAsync(provider, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            try
+            {
+                await consumer.FinalizeAsync(provider, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                await ReleaseAsync(provider).ConfigureAwait(false);
+                await ReleaseAsync(consumer).ConfigureAwait(false);
+            }
+        }
 
         if (consumer.HadErrors)
         {
@@ -274,12 +286,42 @@ public class Worker : IHostedService, IDisposable
     }
 
     /// <summary>
+    /// Releases a connector that holds resources, whichever disposal contract it implements.
+    /// </summary>
+    /// <param name="connector">The connector to release.</param>
+    /// <returns>A task that completes when the connector has been released.</returns>
+    private async ValueTask ReleaseAsync(object connector)
+    {
+        try
+        {
+            switch (connector)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to release {Connector}.", connector.GetType().Name);
+        }
+    }
+
+    /// <summary>
     /// Builds a provider instance by dynamically loading the connector assembly.
     /// </summary>
+    /// <param name="section">The source section of the job configuration.</param>
+    /// <param name="deserializer">The function the connector deserializes its configuration with.</param>
+    /// <param name="decryptor">The decryptor for protected configuration values, if a key is configured.</param>
+    /// <returns>The provider, configured from the complete section.</returns>
     private IProvider BuildProvider(
-        SourceConfiguration sourceConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
+        ConnectorSection section, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
-        string assemblyName = sourceConfig.Type;
+        string assemblyName = section.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
 
         Type builderType = assembly.GetTypes()
@@ -288,13 +330,7 @@ public class Worker : IHostedService, IDisposable
 
         IProviderBuilder providerBuilder = (IProviderBuilder)Activator.CreateInstance(builderType)!;
 
-        byte[] configBytes = Encoding.UTF8.GetBytes(
-            new SerializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build()
-                .Serialize(sourceConfig));
-
-        providerBuilder.AddConfiguration(configBytes);
+        providerBuilder.AddConfiguration(section.Content);
         providerBuilder.AddMetadata(null);
         providerBuilder.AddDeserializer(deserializer);
         providerBuilder.AddLogger(_logger);
@@ -308,10 +344,14 @@ public class Worker : IHostedService, IDisposable
     /// <summary>
     /// Builds a consumer instance by dynamically loading the connector assembly.
     /// </summary>
+    /// <param name="section">The target section of the job configuration.</param>
+    /// <param name="deserializer">The function the connector deserializes its configuration with.</param>
+    /// <param name="decryptor">The decryptor for protected configuration values, if a key is configured.</param>
+    /// <returns>The consumer, configured from the complete section.</returns>
     private IConsumer BuildConsumer(
-        TargetConfiguration targetConfig, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
+        ConnectorSection section, Func<byte[], Type, object> deserializer, Decryptor? decryptor)
     {
-        string assemblyName = targetConfig.Type;
+        string assemblyName = section.Type;
         System.Reflection.Assembly assembly = System.Reflection.Assembly.Load(assemblyName);
 
         Type builderType = assembly.GetTypes()
@@ -320,13 +360,7 @@ public class Worker : IHostedService, IDisposable
 
         IConsumerBuilder consumerBuilder = (IConsumerBuilder)Activator.CreateInstance(builderType)!;
 
-        byte[] configBytes = Encoding.UTF8.GetBytes(
-            new SerializerBuilder()
-                .WithNamingConvention(CamelCaseNamingConvention.Instance)
-                .Build()
-                .Serialize(targetConfig));
-
-        consumerBuilder.AddConfiguration(configBytes);
+        consumerBuilder.AddConfiguration(section.Content);
         consumerBuilder.AddMetadata(null);
         consumerBuilder.AddDeserializer(deserializer);
         consumerBuilder.AddLogger(_logger);
@@ -456,6 +490,16 @@ internal class ScheduledJob
     public ServiceSyncConfiguration Configuration { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets the source section of the configuration, or <c>null</c> when the file has none.
+    /// </summary>
+    public ConnectorSection? Source { get; set; }
+
+    /// <summary>
+    /// Gets or sets the target section of the configuration, or <c>null</c> when the file has none.
+    /// </summary>
+    public ConnectorSection? Target { get; set; }
+
+    /// <summary>
     /// Gets or sets the parsed cron schedule.
     /// </summary>
     public CrontabSchedule CronSchedule { get; set; } = null!;
@@ -490,16 +534,6 @@ internal class ServiceSyncConfiguration
     /// Gets or sets the cron expression defining when the synchronization runs.
     /// </summary>
     public string? Schedule { get; set; }
-
-    /// <summary>
-    /// Gets or sets the source provider configuration.
-    /// </summary>
-    public SourceConfiguration? Source { get; set; }
-
-    /// <summary>
-    /// Gets or sets the target consumer configuration.
-    /// </summary>
-    public TargetConfiguration? Target { get; set; }
 
     /// <summary>
     /// Gets or sets the Keyra vault key location used to disclose protected configuration values.
