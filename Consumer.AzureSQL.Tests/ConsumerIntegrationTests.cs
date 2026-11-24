@@ -403,7 +403,7 @@ public class ConsumerIntegrationTests
         Func<Task> action = () => consumer.SynchronizeAsync(provider, cancellation.Token);
 
         //Assert
-        Assert.CatchAsync<OperationCanceledException>(action);
+        await Assert.ThatAsync(() => action(), Throws.InstanceOf<OperationCanceledException>());
         Assert.Multiple(() =>
         {
             Assert.That(CountStagingTables(pattern), Is.EqualTo(0));
@@ -437,7 +437,7 @@ public class ConsumerIntegrationTests
             Assert.That(warnings, Has.Some.Contains("no unique index"));
             Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.Heap"), Is.EqualTo(1));
         });
-        Assert.ThrowsAsync<InvalidOperationException>(action);
+        await Assert.ThatAsync(() => action(), Throws.TypeOf<InvalidOperationException>());
         Assert.That(broken.HadErrors, Is.True);
     }
 
@@ -725,7 +725,7 @@ public class ConsumerIntegrationTests
         Func<Task> action = () => consumer.SynchronizeAsync(new ListProvider(new[] { Entity(("Id", 1)) }));
 
         //Assert
-        Assert.ThrowsAsync<InvalidOperationException>(action);
+        await Assert.ThatAsync(() => action(), Throws.TypeOf<InvalidOperationException>());
         Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.BadScope"), Is.EqualTo(0));
         await consumer.DisposeAsync();
     }
