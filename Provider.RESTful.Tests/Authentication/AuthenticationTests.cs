@@ -174,7 +174,7 @@ public class AuthenticationTests
     }
 
     [Test]
-    public void EndpointAccessTokenProvider_WithAFailingTokenEndpoint_ThrowsRatherThanReturningEmpty()
+    public async Task EndpointAccessTokenProvider_WithAFailingTokenEndpoint_ThrowsRatherThanReturningEmpty()
     {
         //Arrange
         StubHttpMessageHandler transport = new StubHttpMessageHandler(
@@ -192,7 +192,7 @@ public class AuthenticationTests
             new HttpClient(transport), settings, null, Disclose, NullLogger.Instance);
 
         //Act
-        InvalidOperationException? exception = Assert.ThrowsAsync<InvalidOperationException>(
+        InvalidOperationException? exception = await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await provider.GetAuthorizationTokenAsync(new Uri("https://host/api")));
 
         //Assert
