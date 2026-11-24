@@ -25,6 +25,11 @@ public sealed class ConnectorSection
     /// </summary>
     private const string ObjectNamespaceKey = "objectNamespace";
 
+    /// <summary>
+    /// Root key stating whether the job is a delta synchronization, passed on to each section.
+    /// </summary>
+    private const string DeltaKey = "delta";
+
     #endregion
 
     #region Constructors
@@ -67,7 +72,10 @@ public sealed class ConnectorSection
     /// The name of the synchronization to add to the section as <c>objectNamespace</c> when the
     /// section does not set it itself; <c>null</c> to add nothing.
     /// </param>
-    /// <returns>The section, or <c>null</c> when the document has no such section.</returns>
+    /// <returns>
+    /// The section, or <c>null</c> when the document has no such section. The <c>delta</c> value
+    /// at the root of the document is added to a section that does not set <c>delta</c> itself.
+    /// </returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when the section is not a mapping or does not name a connector type.
     /// </exception>
@@ -101,6 +109,9 @@ public sealed class ConnectorSection
 
         if (!string.IsNullOrWhiteSpace(objectNamespace) && Find(section, ObjectNamespaceKey) is null)
             section.Add(ObjectNamespaceKey, objectNamespace);
+
+        if (Find(section, DeltaKey) is null && Find(root, DeltaKey) is YamlScalarNode delta && delta.Value is not null)
+            section.Add(DeltaKey, delta.Value);
 
         return new ConnectorSection(type.Trim(), Serialize(section));
     }

@@ -510,6 +510,304 @@ public class ConsumerIntegrationTests
     }
 
     /// <summary>
+    /// A full synchronization removes the rows the source no longer returns, across several
+    /// ranges, and leaves no temporary table behind.
+    /// </summary>
+    /// <param name="softDelete">Whether the target records deletions in a column.</param>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Reconcile_FullSynchronization_RemovesRowsTheSourceNoLongerReturns(bool softDelete)
+    {
+        //Arrange
+        string table = "Recon_" + softDelete;
+        string objectNamespace = "Tests.Recon." + Guid.NewGuid().ToString("N");
+        ExecuteOnDatabase($"""
+            CREATE TABLE dbo.[{table}] (Id INT NOT NULL PRIMARY KEY, Name NVARCHAR(50) NULL, Gone DATETIME2 NULL);
+            INSERT dbo.[{table}] (Id, Name, Gone)
+            SELECT TOP (20) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'old', NULL FROM sys.all_columns;
+            UPDATE dbo.[{table}] SET Gone = '2020-01-01' WHERE Id = 20;
+            """);
+        Configuration configuration = Configure(table, objectNamespace, new[] { "Id" }, "Id", "Name");
+        configuration.ReconcileDeletions = true;
+        configuration.Threshold = 50;
+        configuration.BatchSize = 3;
+        configuration.HasDeletedColumn = softDelete;
+        configuration.DeletedColumnName = "Gone";
+        IEntity[] entities = Enumerable.Range(1, softDelete ? 12 : 13)
+            .Select(number => Entity(("Id", number), ("Name", "new")))
+            .ToArray();
+
+        //Act
+        Consumer consumer = await RunAsync(configuration, entities);
+        string active = softDelete ? "Gone IS NULL" : "1 = 1";
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumer.HadErrors, Is.False);
+            Assert.That(Scalar<int>($"SELECT COUNT(*) FROM dbo.[{table}] WHERE {active}"), Is.EqualTo(softDelete ? 12 : 13));
+            Assert.That(Scalar<int>($"SELECT COUNT(*) FROM dbo.[{table}]"), Is.EqualTo(softDelete ? 20 : 13));
+            Assert.That(Scalar<int>($"SELECT COUNT(*) FROM dbo.[{table}] WHERE Name = N'new'"), Is.EqualTo(softDelete ? 12 : 13));
+            Assert.That(
+                softDelete ? Scalar<DateTime>($"SELECT Gone FROM dbo.[{table}] WHERE Id = 20") : new DateTime(2020, 1, 1),
+                Is.EqualTo(new DateTime(2020, 1, 1)));
+            Assert.That(
+                CountStagingTables(SqlStatementBuilder.BuildTempTableName(objectNamespace).Replace("_", "[_]") + "%"),
+                Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>
+    /// When more rows are missing than the threshold allows, none is removed and the run fails.
+    /// </summary>
+    /// <param name="returned">The number of entities the source returns out of ten target rows.</param>
+    /// <param name="threshold">The configured threshold in percent, or <c>null</c> for the default.</param>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [TestCase(0, null)]
+    [TestCase(8, null)]
+    [TestCase(5, 49)]
+    public async Task Reconcile_ThresholdExceeded_RemovesNothingAndRecordsAnError(int returned, int? threshold)
+    {
+        //Arrange
+        string table = $"Limit_{returned}_{threshold}";
+        ExecuteOnDatabase($"""
+            CREATE TABLE dbo.[{table}] (Id INT NOT NULL PRIMARY KEY, Name NVARCHAR(50) NULL);
+            INSERT dbo.[{table}] (Id, Name)
+            SELECT TOP (10) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'old' FROM sys.all_columns;
+            """);
+        Configuration configuration = Configure(table, "Tests." + table, new[] { "Id" }, "Id", "Name");
+        configuration.ReconcileDeletions = true;
+        configuration.Threshold = threshold;
+        IEntity[] entities = Enumerable.Range(1, returned)
+            .Select(number => Entity(("Id", number), ("Name", "new")))
+            .ToArray();
+
+        //Act
+        Consumer consumer = await RunAsync(configuration, entities);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumer.HadErrors, Is.True);
+            Assert.That(Scalar<int>($"SELECT COUNT(*) FROM dbo.[{table}]"), Is.EqualTo(10));
+            Assert.That(_logger.Messages(LogLevel.Error), Has.Some.Contains("exceeds the threshold"));
+        });
+    }
+
+    /// <summary>
+    /// A share of missing rows equal to the threshold is still removed.
+    /// </summary>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [Test]
+    public async Task Reconcile_ShareEqualToThreshold_RemovesRows()
+    {
+        //Arrange
+        ExecuteOnDatabase("""
+            CREATE TABLE dbo.Edge (Id INT NOT NULL PRIMARY KEY, Name NVARCHAR(50) NULL);
+            INSERT dbo.Edge (Id, Name)
+            SELECT TOP (10) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'old' FROM sys.all_columns;
+            """);
+        Configuration configuration = Configure("Edge", "Tests.Edge", new[] { "Id" }, "Id", "Name");
+        configuration.ReconcileDeletions = true;
+        IEntity[] entities = Enumerable.Range(1, 9).Select(number => Entity(("Id", number), ("Name", "new"))).ToArray();
+
+        //Act
+        Consumer consumer = await RunAsync(configuration, entities);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumer.HadErrors, Is.False);
+            Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.Edge"), Is.EqualTo(9));
+        });
+    }
+
+    /// <summary>
+    /// Reconciliation does not take place for a delta synchronization, when it is not enabled,
+    /// or when an entity could not be written.
+    /// </summary>
+    /// <param name="reconcile">Whether reconciliation is enabled.</param>
+    /// <param name="delta">Whether the run is a delta synchronization.</param>
+    /// <param name="withUnusableEntity">Whether the source returns an entity that cannot be written.</param>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [TestCase(false, false, false)]
+    [TestCase(true, true, false)]
+    [TestCase(true, false, true)]
+    public async Task Reconcile_NotApplicable_RemovesNothing(bool reconcile, bool delta, bool withUnusableEntity)
+    {
+        //Arrange
+        string table = $"NoRecon_{reconcile}_{delta}_{withUnusableEntity}";
+        ExecuteOnDatabase($"""
+            CREATE TABLE dbo.[{table}] (Id INT NOT NULL PRIMARY KEY, Name NVARCHAR(50) NULL);
+            INSERT dbo.[{table}] (Id, Name)
+            SELECT TOP (10) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)), N'old' FROM sys.all_columns;
+            """);
+        Configuration configuration = Configure(table, "Tests." + table, new[] { "Id" }, "Id", "Name");
+        configuration.ReconcileDeletions = reconcile;
+        configuration.Delta = delta;
+        configuration.Threshold = 100;
+        List<IEntity> entities = Enumerable.Range(1, 9)
+            .Select(number => Entity(("Id", number), ("Name", "new")))
+            .ToList();
+        if (withUnusableEntity)
+            entities.Add(Entity(("Id", "not a number"), ("Name", "x")));
+
+        //Act
+        Consumer consumer = await RunAsync(configuration, entities.ToArray());
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumer.HadErrors, Is.EqualTo(withUnusableEntity));
+            Assert.That(Scalar<int>($"SELECT COUNT(*) FROM dbo.[{table}]"), Is.EqualTo(10));
+        });
+    }
+
+    /// <summary>
+    /// Deletion constraints keep reconciliation to the rows of one source, and the threshold is
+    /// measured against those rows only.
+    /// </summary>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [Test]
+    public async Task Reconcile_WithConstraints_TouchesOnlyRowsInScope()
+    {
+        //Arrange
+        ExecuteOnDatabase("""
+            CREATE TABLE dbo.Shared (
+                Tenant INT NOT NULL,
+                Kind VARCHAR(10) NULL,
+                Id INT NOT NULL,
+                Name NVARCHAR(50) NULL,
+                CONSTRAINT PK_Shared PRIMARY KEY (Tenant, Id));
+            INSERT dbo.Shared (Tenant, Kind, Id, Name)
+            SELECT 7, 'user', n, N'mine' FROM (VALUES (1),(2),(3),(4)) v(n)
+            UNION ALL SELECT 7, NULL, n, N'untyped' FROM (VALUES (5),(6)) v(n)
+            UNION ALL SELECT 8, 'user', n, N'theirs' FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8)) v(n);
+            """);
+        Configuration configuration = Configure(
+            "Shared", "Tests.Shared", new[] { "Tenant", "Id" }, "Tenant", "Kind", "Id", "Name");
+        configuration.ReconcileDeletions = true;
+        configuration.Threshold = 25;
+        configuration.DeletionConstraints = new Dictionary<string, string?> { ["tenant"] = "7", ["Kind"] = "user" };
+
+        //Act
+        Consumer consumer = await RunAsync(configuration,
+            Entity(("Tenant", 7), ("Kind", "user"), ("Id", 1), ("Name", "mine")),
+            Entity(("Tenant", 7), ("Kind", "user"), ("Id", 2), ("Name", "mine")),
+            Entity(("Tenant", 7), ("Kind", "user"), ("Id", 3), ("Name", "mine")));
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(consumer.HadErrors, Is.False);
+            Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.Shared WHERE Tenant = 7 AND Kind = 'user'"), Is.EqualTo(3));
+            Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.Shared WHERE Tenant = 7 AND Kind IS NULL"), Is.EqualTo(2));
+            Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.Shared WHERE Tenant = 8"), Is.EqualTo(8));
+        });
+    }
+
+    /// <summary>
+    /// A constraint on a column the target does not have stops the run before anything is written.
+    /// </summary>
+    /// <returns>A task that completes when the test has finished.</returns>
+    [Test]
+    public async Task Reconcile_ConstraintOnUnknownColumn_Throws()
+    {
+        //Arrange
+        ExecuteOnDatabase("CREATE TABLE dbo.BadScope (Id INT NOT NULL PRIMARY KEY);");
+        Configuration configuration = Configure("BadScope", "Tests.BadScope", new[] { "Id" }, "Id");
+        configuration.ReconcileDeletions = true;
+        configuration.DeletionConstraints = new Dictionary<string, string?> { ["Nope"] = "1" };
+        Consumer consumer = CreateConsumer(configuration);
+
+        //Act
+        Func<Task> action = () => consumer.SynchronizeAsync(new ListProvider(new[] { Entity(("Id", 1)) }));
+
+        //Assert
+        Assert.ThrowsAsync<InvalidOperationException>(action);
+        Assert.That(Scalar<int>("SELECT COUNT(*) FROM dbo.BadScope"), Is.EqualTo(0));
+        await consumer.DisposeAsync();
+    }
+
+    /// <summary>
+    /// On a target with the statistics of a two-billion-row table, removing a range of candidates
+    /// seeks the target by key, and no reconciliation statement converts a target column.
+    /// </summary>
+    /// <param name="softDeleteColumn">The soft-delete column, or <c>null</c> for physical deletion.</param>
+    [TestCase(null)]
+    [TestCase("Gone")]
+    public void ReconcilePlans_OnVeryLargeTarget_SeekOnApplyAndNeverConvertTheTarget(string? softDeleteColumn)
+    {
+        //Arrange
+        string table = softDeleteColumn is null ? "HugeHard" : "HugeSoft";
+        ExecuteOnDatabase($"""
+            CREATE TABLE dbo.{table} (
+                Tenant INT NOT NULL,
+                Login VARCHAR(100) NOT NULL,
+                Kind VARCHAR(10) NULL,
+                Gone DATETIME2 NULL,
+                CONSTRAINT PK_{table} PRIMARY KEY CLUSTERED (Tenant, Login));
+            UPDATE STATISTICS dbo.{table} WITH ROWCOUNT = 2000000000, PAGECOUNT = 40000000;
+            """);
+        List<TargetColumn> keys = new List<TargetColumn>
+        {
+            new TargetColumn("Tenant", "INT", "INT", null, 4),
+            new TargetColumn("Login", "VARCHAR", "VARCHAR(100)", "Latin1_General_100_CS_AS", 100)
+        };
+        List<string> keyNames = new List<string> { "Tenant", "Login" };
+        List<string> scope = new List<string>
+        {
+            SqlStatementBuilder.BuildConstraint(new TargetColumn("Tenant", "INT", "INT", null, 4), "@C0"),
+            SqlStatementBuilder.BuildConstraint(new TargetColumn("Kind", "VARCHAR", "VARCHAR(10)", "Latin1_General_100_CS_AS", 10), "@C1")
+        };
+        if (softDeleteColumn is not null)
+            scope.Add($"DST.[{softDeleteColumn}] IS NULL");
+
+        //Act
+        List<string> plans = new List<string>();
+        using (SqlConnection connection = new SqlConnection(_connectionString))
+        {
+            connection.Open();
+            Execute(connection, SqlStatementBuilder.BuildCreateKeyTable("#S1_P_K", keys));
+            Execute(connection, SqlStatementBuilder.BuildCreateCandidateTable("#S1_P_X", keys));
+            Execute(connection, "INSERT [#S1_P_X] (Tenant, Login) SELECT TOP (2000) 7, CONVERT(VARCHAR(100), NEWID()) FROM sys.all_columns;");
+            Execute(connection, "SET SHOWPLAN_XML ON;");
+
+            foreach (string statement in new[]
+            {
+                SqlStatementBuilder.BuildReconciliationCount($"[dbo].[{table}]", "#S1_P_K", keyNames, scope),
+                SqlStatementBuilder.BuildCollectCandidates($"[dbo].[{table}]", "#S1_P_K", "#S1_P_X", keyNames, scope),
+                SqlStatementBuilder.BuildApplyCandidates($"[dbo].[{table}]", "#S1_P_X", keyNames, softDeleteColumn)
+            })
+            {
+                using SqlCommand command = new SqlCommand(
+                    "DECLARE @C0 NVARCHAR(MAX) = N'7', @C1 NVARCHAR(MAX) = N'user', @From BIGINT = 1, @To BIGINT = 2000; " + statement,
+                    connection);
+                plans.Add((string)command.ExecuteScalar());
+            }
+        }
+
+        XNamespace ns = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
+        List<string> applyOperators = XDocument.Parse(plans[2]).Descendants(ns + "RelOp")
+            .Where(relOp => relOp.Elements().Any(child => child.Elements(ns + "Object")
+                .Any(target => (string?)target.Attribute("Table") == $"[{table}]")))
+            .Select(relOp => (string)relOp.Attribute("PhysicalOp")!)
+            .ToList();
+        string targetConversion = $"CONVERT_IMPLICIT\\([^)]*\\[{table}\\]";
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(applyOperators, Has.Some.EqualTo("Clustered Index Seek"));
+            Assert.That(applyOperators, Has.None.Contains("Scan"));
+            Assert.That(plans, Has.None.Contains("PlanAffectingConvert"));
+            Assert.That(plans, Has.None.Match(targetConversion));
+            Assert.That(plans[0], Does.Contain("Seek"));
+        });
+    }
+
+    /// <summary>
     /// Builds a consumer configuration for a target table of the fixture database.
     /// </summary>
     /// <param name="tableName">The target table name.</param>

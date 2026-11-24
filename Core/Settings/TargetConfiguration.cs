@@ -29,6 +29,15 @@ public class TargetConfiguration
     public string? ObjectNamespace { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the target is written by a delta synchronization.
+    /// </summary>
+    /// <remarks>
+    /// Carries <see cref="Configuration.Delta"/> to the consumer. The pipeline fills it in before
+    /// the consumer is built.
+    /// </remarks>
+    public bool Delta { get; set; }
+
+    /// <summary>
     /// Gets or sets the connection string for the target system.
     /// May be a Keyra-protected value; disclose it with the pipeline's decryptor.
     /// </summary>

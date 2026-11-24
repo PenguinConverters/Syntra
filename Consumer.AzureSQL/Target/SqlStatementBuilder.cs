@@ -37,6 +37,21 @@ internal static class SqlStatementBuilder
     public const int MaxTempTableNameLength = 100;
 
     /// <summary>
+    /// Suffix of the temporary table collecting every key a run has seen.
+    /// </summary>
+    public const string KeyTableSuffix = "_K";
+
+    /// <summary>
+    /// Suffix of the temporary table listing the target rows a reconciliation deletes.
+    /// </summary>
+    public const string CandidateTableSuffix = "_X";
+
+    /// <summary>
+    /// Largest total byte length of the key columns of a clustered index.
+    /// </summary>
+    public const int MaxIndexKeyBytes = 900;
+
+    /// <summary>
     /// Separator between the entries of a list that takes one statement line per entry at the
     /// second indentation level.
     /// </summary>
@@ -128,15 +143,20 @@ internal static class SqlStatementBuilder
     }
 
     /// <summary>
-    /// Derives the local temporary staging table name from the name of a synchronization.
+    /// Derives a local temporary table name from the name of a synchronization.
     /// </summary>
     /// <param name="objectNamespace">The name identifying the synchronization.</param>
+    /// <param name="suffix">
+    /// The text distinguishing the temporary tables of one run: empty for the staging table,
+    /// <see cref="KeyTableSuffix"/> or <see cref="CandidateTableSuffix"/> for the others.
+    /// </param>
     /// <returns>
-    /// A name such as <c>#S1_ActiveDirectory_Users</c>: the prefix followed by the given name with
-    /// every character other than a letter or digit replaced by an underscore, cut to
+    /// A name such as <c>#S1_ActiveDirectory_Users</c>: the prefix, the given name with every
+    /// character other than a letter or digit replaced by an underscore, and the suffix. The
+    /// name part is cut so that the whole name stays within
     /// <see cref="MaxTempTableNameLength"/> characters. An empty name yields <c>#S1_Sync</c>.
     /// </returns>
-    public static string BuildTempTableName(string? objectNamespace)
+    public static string BuildTempTableName(string? objectNamespace, string suffix = "")
     {
         StringBuilder builder = new StringBuilder(TempTablePrefix);
 
@@ -150,10 +170,265 @@ internal static class SqlStatementBuilder
                 builder.Append(char.IsLetterOrDigit(character) ? character : '_');
         }
 
-        if (builder.Length > MaxTempTableNameLength)
-            builder.Length = MaxTempTableNameLength;
+        if (builder.Length > MaxTempTableNameLength - suffix.Length)
+            builder.Length = MaxTempTableNameLength - suffix.Length;
 
-        return builder.ToString();
+        return builder.Append(suffix).ToString();
+    }
+
+    /// <summary>
+    /// Determines whether a set of key columns can carry a clustered index.
+    /// </summary>
+    /// <param name="keys">The key columns.</param>
+    /// <returns>
+    /// <c>true</c> when no column is a MAX, XML or large-object type and the columns together
+    /// stay within <see cref="MaxIndexKeyBytes"/>; otherwise <c>false</c>.
+    /// </returns>
+    public static bool CanIndex(IReadOnlyList<TargetColumn> keys)
+    {
+        int bytes = 0;
+
+        foreach (TargetColumn key in keys)
+        {
+            if (key.MaxLength <= 0 || key.BaseType is "XML" or "TEXT" or "NTEXT" or "IMAGE")
+                return false;
+
+            bytes += key.MaxLength;
+        }
+
+        return bytes <= MaxIndexKeyBytes;
+    }
+
+    /// <summary>
+    /// Builds the <c>CREATE TABLE</c> statement of the table collecting every key a run has seen.
+    /// </summary>
+    /// <param name="keyTableName">The key table name.</param>
+    /// <param name="keys">The primary key columns of the target.</param>
+    /// <returns>
+    /// A statement declaring the key columns with the type and collation of the target. When the
+    /// columns can be indexed the table is clustered on them and silently drops a key it already
+    /// holds; otherwise it is a heap.
+    /// </returns>
+    public static string BuildCreateKeyTable(string keyTableName, IReadOnlyList<TargetColumn> keys)
+    {
+        string declarations = string.Join(",\n    ", keys.Select(BuildKeyDeclaration));
+        string keyList = string.Join(", ", keys.Select(key => QuoteIdentifier(key.Name)));
+        string index = CanIndex(keys)
+            ? $",\n    PRIMARY KEY CLUSTERED ({keyList}) WITH (IGNORE_DUP_KEY = ON)"
+            : string.Empty;
+
+        return $"""
+            CREATE TABLE
+                {QuoteIdentifier(keyTableName)}
+            (
+                {declarations}{index}
+            );
+            """;
+    }
+
+    /// <summary>
+    /// Builds the <c>CREATE TABLE</c> statement of the table listing the target rows to delete.
+    /// </summary>
+    /// <param name="candidateTableName">The candidate table name.</param>
+    /// <param name="keys">The primary key columns of the target.</param>
+    /// <returns>
+    /// A statement declaring the key columns with the type and collation of the target, and a
+    /// clustered <see cref="SequenceColumn"/> numbering the rows from one.
+    /// </returns>
+    public static string BuildCreateCandidateTable(string candidateTableName, IReadOnlyList<TargetColumn> keys)
+    {
+        string declarations = string.Join(",\n    ", keys.Select(BuildKeyDeclaration));
+
+        return $"""
+            CREATE TABLE
+                {QuoteIdentifier(candidateTableName)}
+            (
+                {QuoteIdentifier(SequenceColumn)} BIGINT IDENTITY(1, 1) NOT NULL PRIMARY KEY CLUSTERED,
+                {declarations}
+            );
+            """;
+    }
+
+    /// <summary>
+    /// Builds the statement that records the keys of the staged batch in the key table.
+    /// </summary>
+    /// <param name="keyTableName">The key table name.</param>
+    /// <param name="tempTableName">The staging table name.</param>
+    /// <param name="primaryKeys">The primary key column names.</param>
+    /// <returns>
+    /// An insert of every staged key whose latest staged row is not a deletion.
+    /// </returns>
+    public static string BuildInsertKeys(string keyTableName, string tempTableName, IReadOnlyList<string> primaryKeys)
+    {
+        string keyList = string.Join(", ", primaryKeys.Select(QuoteIdentifier));
+        string deleted = QuoteIdentifier(DeletedFlagColumn);
+
+        return $"""
+            INSERT INTO
+                {QuoteIdentifier(keyTableName)} ({keyList})
+            SELECT
+                {keyList}
+            FROM
+                (
+                    SELECT
+                        {keyList}, {deleted},
+                        ROW_NUMBER() OVER (PARTITION BY {keyList} ORDER BY {QuoteIdentifier(SequenceColumn)} DESC) As [__S1Rank]
+                    FROM
+                        {QuoteIdentifier(tempTableName)}
+                ) As STG
+            WHERE
+                STG.[__S1Rank] = 1
+                AND STG.{deleted} = 0;
+            """;
+    }
+
+    /// <summary>
+    /// Builds the predicate restricting reconciliation to target rows with a given column value.
+    /// </summary>
+    /// <param name="column">The constrained target column.</param>
+    /// <param name="parameterName">
+    /// The name of the parameter carrying the value, or <c>null</c> to select rows where the
+    /// column is null.
+    /// </param>
+    /// <returns>
+    /// A comparison of the bare column with the parameter converted to the column's own type.
+    /// </returns>
+    public static string BuildConstraint(TargetColumn column, string? parameterName)
+    {
+        return parameterName is null
+            ? $"DST.{QuoteIdentifier(column.Name)} IS NULL"
+            : $"DST.{QuoteIdentifier(column.Name)} = CAST({parameterName} AS {column.Declaration})";
+    }
+
+    /// <summary>
+    /// Builds the query counting the target rows in scope and those among them whose key the run
+    /// has not seen.
+    /// </summary>
+    /// <param name="targetObject">The quoted, schema-qualified target table name.</param>
+    /// <param name="keyTableName">The key table name.</param>
+    /// <param name="primaryKeys">The primary key column names.</param>
+    /// <param name="scope">The predicates every row in scope satisfies; may be empty.</param>
+    /// <returns>A query returning one row with the columns <c>Total</c> and <c>Missing</c>.</returns>
+    public static string BuildReconciliationCount(
+        string targetObject,
+        string keyTableName,
+        IReadOnlyList<string> primaryKeys,
+        IReadOnlyList<string> scope)
+    {
+        string keyList = string.Join(", ", primaryKeys.Select(QuoteIdentifier));
+
+        return $"""
+            SELECT
+                COUNT_BIG(*) As [Total],
+                COUNT_BIG(*) - COUNT_BIG(SRC.[__S1Seen]) As [Missing]
+            FROM
+                {targetObject} DST
+            LEFT JOIN
+                (
+                    SELECT DISTINCT
+                        {keyList}, 1 As [__S1Seen]
+                    FROM
+                        {QuoteIdentifier(keyTableName)}
+                ) As SRC
+            ON
+                ({BuildKeyMatch(primaryKeys)})
+            WHERE
+                {BuildScope(scope)};
+            """;
+    }
+
+    /// <summary>
+    /// Builds the statement that lists the target rows in scope whose key the run has not seen.
+    /// </summary>
+    /// <param name="targetObject">The quoted, schema-qualified target table name.</param>
+    /// <param name="keyTableName">The key table name.</param>
+    /// <param name="candidateTableName">The candidate table name.</param>
+    /// <param name="primaryKeys">The primary key column names.</param>
+    /// <param name="scope">The predicates every row in scope satisfies; may be empty.</param>
+    /// <returns>An insert of the keys of those rows into the candidate table.</returns>
+    public static string BuildCollectCandidates(
+        string targetObject,
+        string keyTableName,
+        string candidateTableName,
+        IReadOnlyList<string> primaryKeys,
+        IReadOnlyList<string> scope)
+    {
+        string keyList = string.Join(", ", primaryKeys.Select(QuoteIdentifier));
+        string targetKeys = string.Join(", ", primaryKeys.Select(key => $"DST.{QuoteIdentifier(key)}"));
+
+        return $"""
+            INSERT INTO
+                {QuoteIdentifier(candidateTableName)} ({keyList})
+            SELECT
+                {targetKeys}
+            FROM
+                {targetObject} DST
+            WHERE
+                {BuildScope(scope)}
+                AND NOT EXISTS
+                (
+                    SELECT
+                        1
+                    FROM
+                        {QuoteIdentifier(keyTableName)} SRC
+                    WHERE
+                        {BuildKeyMatch(primaryKeys)}
+                );
+            """;
+    }
+
+    /// <summary>
+    /// Builds the statement that deletes one range of the listed candidate rows from the target.
+    /// </summary>
+    /// <param name="targetObject">The quoted, schema-qualified target table name.</param>
+    /// <param name="candidateTableName">The candidate table name.</param>
+    /// <param name="primaryKeys">The primary key column names.</param>
+    /// <param name="softDeleteColumn">
+    /// The target column recording a deletion time, or <c>null</c> to delete rows physically.
+    /// </param>
+    /// <returns>
+    /// A statement acting on the candidates numbered <c>@From</c> to <c>@To</c>: a delete, or an
+    /// update stamping the soft-delete column of rows not yet marked.
+    /// </returns>
+    public static string BuildApplyCandidates(
+        string targetObject,
+        string candidateTableName,
+        IReadOnlyList<string> primaryKeys,
+        string? softDeleteColumn)
+    {
+        string range = $"SRC.{QuoteIdentifier(SequenceColumn)} BETWEEN @From AND @To";
+
+        if (softDeleteColumn is null)
+        {
+            return $"""
+                DELETE
+                    DST
+                FROM
+                    {targetObject} DST
+                JOIN
+                    {QuoteIdentifier(candidateTableName)} SRC
+                ON
+                    ({BuildKeyMatch(primaryKeys)})
+                WHERE
+                    {range};
+                """;
+        }
+
+        return $"""
+            UPDATE
+                DST
+            SET
+                DST.{QuoteIdentifier(softDeleteColumn)} = SYSUTCDATETIME()
+            FROM
+                {targetObject} DST
+            JOIN
+                {QuoteIdentifier(candidateTableName)} SRC
+            ON
+                ({BuildKeyMatch(primaryKeys)})
+            WHERE
+                {range}
+                AND DST.{QuoteIdentifier(softDeleteColumn)} IS NULL;
+            """;
     }
 
     /// <summary>
@@ -451,6 +726,39 @@ internal static class SqlStatementBuilder
                 UPDATE SET
                     {string.Join(ListSeparator, assignments)}
             """;
+    }
+
+    /// <summary>
+    /// Builds the declaration of a key column in a key or candidate table.
+    /// </summary>
+    /// <param name="key">The primary key column of the target.</param>
+    /// <returns>The column with the target's type and collation, declared not nullable.</returns>
+    private static string BuildKeyDeclaration(TargetColumn key)
+    {
+        return string.IsNullOrWhiteSpace(key.Collation)
+            ? $"{QuoteIdentifier(key.Name)} {key.Declaration} NOT NULL"
+            : $"{QuoteIdentifier(key.Name)} {key.Declaration} COLLATE {key.Collation} NOT NULL";
+    }
+
+    /// <summary>
+    /// Builds the condition matching target and source rows on the bare primary key columns.
+    /// </summary>
+    /// <param name="primaryKeys">The primary key column names.</param>
+    /// <returns>One equality per key column, joined with <c>AND</c>.</returns>
+    private static string BuildKeyMatch(IReadOnlyList<string> primaryKeys)
+    {
+        return string.Join(" AND ", primaryKeys.Select(key =>
+            $"DST.{QuoteIdentifier(key)} = SRC.{QuoteIdentifier(key)}"));
+    }
+
+    /// <summary>
+    /// Joins scope predicates into one condition.
+    /// </summary>
+    /// <param name="scope">The predicates; may be empty.</param>
+    /// <returns>The predicates joined with <c>AND</c>, or a condition that is always true.</returns>
+    private static string BuildScope(IReadOnlyList<string> scope)
+    {
+        return scope.Count == 0 ? "1 = 1" : string.Join("\n    AND ", scope);
     }
 
     /// <summary>

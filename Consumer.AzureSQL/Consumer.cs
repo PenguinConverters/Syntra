@@ -26,8 +26,13 @@ namespace PenguinConverters.Syntra.Consumer.AzureSQL;
 /// </para>
 /// <para>
 /// One connection is held open for the whole run and the entity stream is processed
-/// sequentially. Entities missing from a full synchronization are not removed from the target;
-/// only deletions the source reports are applied.
+/// sequentially.
+/// </para>
+/// <para>
+/// Deletions the source reports are applied with their batch. A full synchronization configured
+/// to reconcile deletions also collects every key it sees in a second temporary table and, once
+/// the stream has completed without errors, removes the target rows in scope whose key was not
+/// seen, unless they exceed the configured threshold.
 /// </para>
 /// </remarks>
 public class Consumer : Core.Target.Consumer, IAsyncDisposable
@@ -129,6 +134,46 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
     /// </summary>
     private long _batchesMerged;
 
+    /// <summary>
+    /// The quoted, schema-qualified name of the target table.
+    /// </summary>
+    private string? _targetObject;
+
+    /// <summary>
+    /// The target column recording a deletion time, or <c>null</c> when rows are deleted physically.
+    /// </summary>
+    private string? _softDeleteColumn;
+
+    /// <summary>
+    /// The primary key column names as the catalog spells them.
+    /// </summary>
+    private List<string> _primaryKeys = new List<string>();
+
+    /// <summary>
+    /// The table collecting every key the run has seen; set only when the run reconciles deletions.
+    /// </summary>
+    private string? _keyTable;
+
+    /// <summary>
+    /// The table listing the target rows a reconciliation removes; set together with the key table.
+    /// </summary>
+    private string? _candidateTable;
+
+    /// <summary>
+    /// The statement recording the keys of a staged batch in the key table.
+    /// </summary>
+    private string? _insertKeysStatement;
+
+    /// <summary>
+    /// The target columns and values that limit which rows take part in reconciliation.
+    /// </summary>
+    private List<KeyValuePair<TargetColumn, string?>> _constraints = new List<KeyValuePair<TargetColumn, string?>>();
+
+    /// <summary>
+    /// Whether the source stream was read to its end and every batch was applied.
+    /// </summary>
+    private bool _streamCompleted;
+
     #endregion
 
     #region Properties
@@ -185,6 +230,8 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
 
             await FlushAsync(cancellationToken).ConfigureAwait(false);
 
+            _streamCompleted = true;
+
             Logger.LogInformation(
                 "Azure SQL synchronization completed: {Staged} row(s) staged, {Affected} target row(s) written, " +
                 "{Skipped} entity(ies) skipped, {Batches} batch(es).",
@@ -210,7 +257,32 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
     /// <inheritdoc />
     public override async Task FinalizeAsync(IProvider provider, CancellationToken cancellationToken = default)
     {
-        await ReleaseSessionAsync().ConfigureAwait(false);
+        try
+        {
+            if (_keyTable is not null && _connection is not null)
+            {
+                if (_streamCompleted && !HadErrors)
+                {
+                    await ReconcileAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    Logger.LogWarning(
+                        "Deletion reconciliation for table '{TableName}' was skipped because the " +
+                        "synchronization did not complete without errors.",
+                        _configuration!.TableName);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            HadErrors = true;
+            Logger.LogError(ex, "Deletion reconciliation failed for table '{TableName}'.", _configuration!.TableName);
+        }
+        finally
+        {
+            await ReleaseSessionAsync().ConfigureAwait(false);
+        }
 
         if (_configuration is not null)
             Logger.LogInformation("Azure SQL finalization completed for table '{TableName}'.", _configuration.TableName);
@@ -302,6 +374,13 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
         _mergeStatement = SqlStatementBuilder.BuildMerge(
             targetObject, _stagingTable, _columns, primaryKeys, softDeleteColumn);
 
+        _targetObject = targetObject;
+        _softDeleteColumn = softDeleteColumn;
+        _primaryKeys = primaryKeys;
+
+        if (_configuration.ReconcileDeletions && !_configuration.Delta)
+            await PrepareReconciliationAsync(synchronizationName, targetSchema, cancellationToken).ConfigureAwait(false);
+
         _batch = CreateBatchTable();
         _sequence = 0;
 
@@ -348,7 +427,8 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
                 ? null
                 : reader.GetString(7);
 
-            schema[columnName] = new TargetColumn(columnName, typeName.ToUpperInvariant(), declaration, collation);
+            schema[columnName] = new TargetColumn(
+                columnName, typeName.ToUpperInvariant(), declaration, collation, reader.GetInt16(4));
         }
 
         if (targetObject is null)
@@ -615,6 +695,14 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
 
         int affected = await MergeAsync(cancellationToken).ConfigureAwait(false);
 
+        if (_insertKeysStatement is not null)
+        {
+            await ExecuteAsync(
+                _insertKeysStatement,
+                _configuration!.CommandTimeoutSeconds,
+                cancellationToken).ConfigureAwait(false);
+        }
+
         await ExecuteAsync(
             SqlStatementBuilder.BuildTruncate(_stagingTable!),
             _configuration!.CommandTimeoutSeconds,
@@ -684,6 +772,185 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
     }
 
     /// <summary>
+    /// Resolves the reconciliation constraints against the target and creates the key table.
+    /// </summary>
+    /// <param name="synchronizationName">The name the temporary tables are derived from.</param>
+    /// <param name="targetSchema">The writable columns of the target table.</param>
+    /// <param name="cancellationToken">A token to signal cancellation.</param>
+    /// <returns>A task that completes when the key table exists and is empty.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when a constraint names a column the target does not have.
+    /// </exception>
+    private async Task PrepareReconciliationAsync(
+        string synchronizationName,
+        Dictionary<string, TargetColumn> targetSchema,
+        CancellationToken cancellationToken)
+    {
+        _constraints = new List<KeyValuePair<TargetColumn, string?>>();
+
+        foreach (KeyValuePair<string, string?> constraint in
+            _configuration!.DeletionConstraints ?? new Dictionary<string, string?>())
+        {
+            if (!targetSchema.TryGetValue(constraint.Key, out TargetColumn? column))
+            {
+                throw new InvalidOperationException(
+                    $"Deletion constraint column '{constraint.Key}' does not exist on target table " +
+                    $"'{_configuration.TableName}'.");
+            }
+
+            _constraints.Add(new KeyValuePair<TargetColumn, string?>(column, constraint.Value));
+        }
+
+        List<TargetColumn> keys = _keyOrdinals.Select(ordinal => _columns[ordinal]).ToList();
+
+        _keyTable = SqlStatementBuilder.BuildTempTableName(synchronizationName, SqlStatementBuilder.KeyTableSuffix);
+        _candidateTable = SqlStatementBuilder.BuildTempTableName(
+            synchronizationName, SqlStatementBuilder.CandidateTableSuffix);
+
+        foreach (string table in new[] { _keyTable, _candidateTable })
+        {
+            await ExecuteAsync(
+                SqlStatementBuilder.BuildDropTempTableIfExists(table),
+                _configuration.CommandTimeoutSeconds,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await ExecuteAsync(
+            SqlStatementBuilder.BuildCreateKeyTable(_keyTable, keys),
+            _configuration.CommandTimeoutSeconds,
+            cancellationToken).ConfigureAwait(false);
+
+        await ExecuteAsync(
+            SqlStatementBuilder.BuildCreateCandidateTable(_candidateTable, keys),
+            _configuration.CommandTimeoutSeconds,
+            cancellationToken).ConfigureAwait(false);
+
+        _insertKeysStatement = SqlStatementBuilder.BuildInsertKeys(_keyTable, _stagingTable!, _primaryKeys);
+
+        Logger.LogDebug(
+            "Deletion reconciliation prepared for {Target}: keys are collected in '{KeyTable}', {Constraints} constraint(s).",
+            _targetObject,
+            _keyTable,
+            _constraints.Count);
+    }
+
+    /// <summary>
+    /// Removes the target rows in scope whose key the completed run did not see.
+    /// </summary>
+    /// <remarks>
+    /// The rows in scope are those satisfying every deletion constraint and, with a soft-delete
+    /// column, not yet marked as deleted. When the rows to remove exceed the configured share of
+    /// the rows in scope, nothing is removed and an error is recorded. Otherwise the rows are
+    /// removed in ranges of the configured batch size.
+    /// </remarks>
+    /// <param name="cancellationToken">A token to signal cancellation.</param>
+    /// <returns>A task that completes when reconciliation has finished.</returns>
+    private async Task ReconcileAsync(CancellationToken cancellationToken)
+    {
+        List<string> scope = new List<string>();
+
+        if (_softDeleteColumn is not null)
+            scope.Add($"DST.{SqlStatementBuilder.QuoteIdentifier(_softDeleteColumn)} IS NULL");
+
+        for (int i = 0; i < _constraints.Count; i++)
+        {
+            scope.Add(SqlStatementBuilder.BuildConstraint(
+                _constraints[i].Key, _constraints[i].Value is null ? null : $"@C{i}"));
+        }
+
+        long total;
+        long missing;
+
+        await using (SqlCommand count = new SqlCommand(
+            SqlStatementBuilder.BuildReconciliationCount(_targetObject!, _keyTable!, _primaryKeys, scope), _connection)
+        {
+            CommandTimeout = _configuration!.CommandTimeoutSeconds
+        })
+        {
+            count.Parameters.AddRange(CreateConstraintParameters());
+
+            await using SqlDataReader reader = await count.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            await reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+
+            total = reader.GetInt64(0);
+            missing = reader.GetInt64(1);
+        }
+
+        if (missing == 0)
+        {
+            Logger.LogInformation(
+                "Deletion reconciliation for '{TableName}': all {Total} row(s) in scope were seen; nothing to remove.",
+                _configuration.TableName,
+                total);
+            return;
+        }
+
+        int threshold = _configuration.Threshold ?? Configuration.DefaultThreshold;
+        double share = missing * 100.0 / total;
+
+        if (share > threshold)
+        {
+            HadErrors = true;
+            Logger.LogError(
+                "Deletion reconciliation for '{TableName}' was refused: {Missing} of {Total} row(s) in scope " +
+                "({Share:F2}%) were not returned by the source, which exceeds the threshold of {Threshold}%. " +
+                "No row was removed.",
+                _configuration.TableName,
+                missing,
+                total,
+                share,
+                threshold);
+            return;
+        }
+
+        long candidates = await ExecuteAsync(
+            SqlStatementBuilder.BuildCollectCandidates(_targetObject!, _keyTable!, _candidateTable!, _primaryKeys, scope),
+            _configuration.CommandTimeoutSeconds,
+            cancellationToken,
+            CreateConstraintParameters()).ConfigureAwait(false);
+
+        string apply = SqlStatementBuilder.BuildApplyCandidates(
+            _targetObject!, _candidateTable!, _primaryKeys, _softDeleteColumn);
+        long removed = 0;
+
+        for (long from = 1; from <= candidates; from += _configuration.BatchSize)
+        {
+            removed += await ExecuteAsync(
+                apply,
+                _configuration.CommandTimeoutSeconds,
+                cancellationToken,
+                new SqlParameter("@From", SqlDbType.BigInt) { Value = from },
+                new SqlParameter("@To", SqlDbType.BigInt) { Value = from + _configuration.BatchSize - 1 }).ConfigureAwait(false);
+        }
+
+        _rowsAffected += removed;
+
+        Logger.LogInformation(
+            "Deletion reconciliation for '{TableName}': {Removed} of {Total} row(s) in scope were {Action}.",
+            _configuration.TableName,
+            removed,
+            total,
+            _softDeleteColumn is null ? "deleted" : $"marked in '{_softDeleteColumn}'");
+    }
+
+    /// <summary>
+    /// Creates the parameters carrying the deletion constraint values.
+    /// </summary>
+    /// <returns>One parameter named <c>@C</c> and its position for every constraint with a value.</returns>
+    private SqlParameter[] CreateConstraintParameters()
+    {
+        List<SqlParameter> parameters = new List<SqlParameter>();
+
+        for (int i = 0; i < _constraints.Count; i++)
+        {
+            if (_constraints[i].Value is not null)
+                parameters.Add(new SqlParameter($"@C{i}", SqlDbType.NVarChar, -1) { Value = _constraints[i].Value });
+        }
+
+        return parameters.ToArray();
+    }
+
+    /// <summary>
     /// Determines whether a failed batch merge can be repeated with the same staged rows.
     /// </summary>
     /// <param name="exception">The failure reported by the server.</param>
@@ -714,20 +981,26 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
 
         try
         {
-            if (connection.State == ConnectionState.Open && _stagingTable is not null)
+            if (connection.State == ConnectionState.Open)
             {
-                await using SqlCommand command = new SqlCommand(
-                    SqlStatementBuilder.BuildDropTempTableIfExists(_stagingTable), connection)
+                foreach (string? table in new[] { _stagingTable, _keyTable, _candidateTable })
                 {
-                    CommandTimeout = ReleaseTimeoutSeconds
-                };
+                    if (table is null)
+                        continue;
 
-                await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+                    await using SqlCommand command = new SqlCommand(
+                        SqlStatementBuilder.BuildDropTempTableIfExists(table), connection)
+                    {
+                        CommandTimeout = ReleaseTimeoutSeconds
+                    };
+
+                    await command.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
+                }
             }
         }
         catch (Exception ex) when (ex is SqlException or InvalidOperationException)
         {
-            Logger.LogWarning(ex, "Failed to drop staging table '{Staging}'.", _stagingTable);
+            Logger.LogWarning(ex, "Failed to drop the temporary tables of '{Staging}'.", _stagingTable);
         }
         finally
         {
@@ -763,13 +1036,20 @@ public class Consumer : Core.Target.Consumer, IAsyncDisposable
     /// <param name="sql">The statement text.</param>
     /// <param name="timeoutSeconds">The command timeout, in seconds.</param>
     /// <param name="cancellationToken">A token to signal cancellation.</param>
+    /// <param name="parameters">The parameters the statement refers to, if any.</param>
     /// <returns>The number of rows the statement affected.</returns>
-    private async Task<int> ExecuteAsync(string sql, int timeoutSeconds, CancellationToken cancellationToken)
+    private async Task<int> ExecuteAsync(
+        string sql,
+        int timeoutSeconds,
+        CancellationToken cancellationToken,
+        params SqlParameter[] parameters)
     {
         await using SqlCommand command = new SqlCommand(sql, _connection)
         {
             CommandTimeout = timeoutSeconds
         };
+
+        command.Parameters.AddRange(parameters);
 
         return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }

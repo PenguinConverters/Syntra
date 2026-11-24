@@ -476,6 +476,127 @@ public class SqlStatementBuilderTests
     }
 
     /// <summary>
+    /// A suffix survives the truncation of a long synchronization name.
+    /// </summary>
+    [Test]
+    public void BuildTempTableName_LongInputWithSuffix_KeepsSuffix()
+    {
+        //Arrange
+        string longName = new string('a', 300);
+
+        //Act
+        string name = SqlStatementBuilder.BuildTempTableName(longName, SqlStatementBuilder.KeyTableSuffix);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(name, Has.Length.EqualTo(SqlStatementBuilder.MaxTempTableNameLength));
+            Assert.That(name, Does.EndWith("_K"));
+        });
+    }
+
+    /// <summary>
+    /// The key table is clustered on its keys when they can be indexed and is a heap otherwise.
+    /// </summary>
+    /// <param name="maxLength">The byte length of the character key column.</param>
+    /// <param name="indexed">Whether a clustered primary key is expected.</param>
+    [TestCase((short)200, true)]
+    [TestCase((short)2000, false)]
+    [TestCase((short)-1, false)]
+    public void BuildCreateKeyTable_IndexesKeysWhenPossible(short maxLength, bool indexed)
+    {
+        //Arrange
+        List<TargetColumn> keys = new List<TargetColumn>
+        {
+            new TargetColumn("Tenant", "INT", "INT", null, 4),
+            new TargetColumn("Login", "NVARCHAR", "NVARCHAR(100)", "Latin1_General_100_CS_AS", maxLength)
+        };
+
+        //Act
+        string sql = Flat(SqlStatementBuilder.BuildCreateKeyTable("#S1_Users_K", keys));
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.Contain("[Tenant] INT NOT NULL, [Login] NVARCHAR(100) COLLATE Latin1_General_100_CS_AS NOT NULL"));
+            Assert.That(
+                sql.Contains("PRIMARY KEY CLUSTERED ([Tenant], [Login]) WITH (IGNORE_DUP_KEY = ON)"),
+                Is.EqualTo(indexed));
+        });
+    }
+
+    /// <summary>
+    /// Only keys whose latest staged row is not a deletion are recorded as seen.
+    /// </summary>
+    [Test]
+    public void BuildInsertKeys_RecordsLatestNonDeletedKeys()
+    {
+        //Arrange
+
+        //Act
+        string sql = Flat(SqlStatementBuilder.BuildInsertKeys("#S1_Users_K", "#S1_Users", new List<string> { "Id" }));
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(sql, Does.StartWith("INSERT INTO [#S1_Users_K] ([Id]) SELECT [Id] FROM ("));
+            Assert.That(sql, Does.EndWith("WHERE STG.[__S1Rank] = 1 AND STG.[__S1Deleted] = 0;"));
+        });
+    }
+
+    /// <summary>
+    /// A constraint compares the bare target column with the value converted to the column's type.
+    /// </summary>
+    [Test]
+    public void BuildConstraint_ConvertsTheValueNotTheColumn()
+    {
+        //Arrange
+        TargetColumn column = new TargetColumn("Tenant", "INT", "INT", null, 4);
+
+        //Act
+        string withValue = SqlStatementBuilder.BuildConstraint(column, "@C0");
+        string withNull = SqlStatementBuilder.BuildConstraint(column, null);
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(withValue, Is.EqualTo("DST.[Tenant] = CAST(@C0 AS INT)"));
+            Assert.That(withNull, Is.EqualTo("DST.[Tenant] IS NULL"));
+        });
+    }
+
+    /// <summary>
+    /// The reconciliation statements act within the given scope and match on the bare key columns.
+    /// </summary>
+    /// <param name="softDeleteColumn">The soft-delete column, or <c>null</c> for physical deletion.</param>
+    [TestCase(null)]
+    [TestCase("Gone")]
+    public void ReconciliationStatements_StayInScopeAndMatchOnKeys(string? softDeleteColumn)
+    {
+        //Arrange
+        List<string> keys = new List<string> { "Tenant", "Id" };
+        List<string> scope = new List<string> { "DST.[Tenant] = CAST(@C0 AS INT)" };
+
+        //Act
+        string count = Flat(SqlStatementBuilder.BuildReconciliationCount("[dbo].[T]", "#K", keys, scope));
+        string unscoped = Flat(SqlStatementBuilder.BuildReconciliationCount("[dbo].[T]", "#K", keys, new List<string>()));
+        string collect = Flat(SqlStatementBuilder.BuildCollectCandidates("[dbo].[T]", "#K", "#X", keys, scope));
+        string apply = Flat(SqlStatementBuilder.BuildApplyCandidates("[dbo].[T]", "#X", keys, softDeleteColumn));
+
+        //Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(count, Does.Contain("ON (DST.[Tenant] = SRC.[Tenant] AND DST.[Id] = SRC.[Id]) WHERE DST.[Tenant] = CAST(@C0 AS INT);"));
+            Assert.That(unscoped, Does.EndWith("WHERE 1 = 1;"));
+            Assert.That(collect, Does.StartWith("INSERT INTO [#X] ([Tenant], [Id]) SELECT DST.[Tenant], DST.[Id] FROM [dbo].[T] DST WHERE DST.[Tenant] = CAST(@C0 AS INT) AND NOT EXISTS ("));
+            Assert.That(apply, Does.Contain("JOIN [#X] SRC ON (DST.[Tenant] = SRC.[Tenant] AND DST.[Id] = SRC.[Id]) WHERE SRC.[__S1Sequence] BETWEEN @From AND @To"));
+            Assert.That(apply, softDeleteColumn is null
+                ? Does.StartWith("DELETE DST FROM [dbo].[T] DST")
+                : Does.StartWith("UPDATE DST SET DST.[Gone] = SYSUTCDATETIME() FROM [dbo].[T] DST").And.EndWith("AND DST.[Gone] IS NULL;"));
+        });
+    }
+
+    /// <summary>
     /// The truncate and drop statements quote the staging table name.
     /// </summary>
     [Test]

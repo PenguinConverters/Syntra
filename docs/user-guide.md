@@ -121,6 +121,30 @@ is read from the source property of the same name unless `SourceProperty` names 
 `BatchSize` is the number of rows applied per `MERGE`; above roughly 3,000 rows SQL Server
 locks the whole table for the duration of a batch instead of the rows written.
 
+A full synchronization can also remove the rows the source no longer returns:
+
+```yaml
+Delta: false
+
+Target:
+  Type: "PenguinConverters.Syntra.Consumer.AzureSQL"
+  # ...
+  ReconcileDeletions: true
+  Threshold: 10
+  DeletionConstraints:
+    objectClass: "user"
+```
+
+| Setting | Meaning |
+|---------|---------|
+| `ReconcileDeletions` | Remove target rows whose key the run did not see. Off by default. |
+| `Delta` (root) | Reconciliation never runs for a delta synchronization. |
+| `Threshold` | Largest share of the rows in scope, in percent, that one run may remove. Default `10`. When more are missing, nothing is removed and the run fails. |
+| `DeletionConstraints` | Column values a row must carry to be considered. Set them when several synchronizations write the same table, so that each only removes its own rows. |
+
+Rows are deleted, or stamped in the soft-delete column when `HasDeletedColumn` is set.
+Reconciliation is skipped when the run was cancelled, failed, or left out any entity.
+
 ### Credential Protection
 
 Credentials are encrypted using the Keyra SDK:

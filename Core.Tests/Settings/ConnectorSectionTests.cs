@@ -110,6 +110,26 @@ public class ConnectorSectionTests
     }
 
     /// <summary>
+    /// The delta flag at the root of the document reaches a section unless the section sets its own.
+    /// </summary>
+    /// <param name="document">The job configuration text.</param>
+    /// <param name="expected">The value the connector is expected to receive.</param>
+    [TestCase("Delta: true\ntarget:\n  type: X\n", true)]
+    [TestCase("delta: true\ntarget:\n  type: X\n  Delta: false\n", false)]
+    [TestCase("target:\n  type: X\n", false)]
+    public void Read_Delta_IsTakenFromTheRootUnlessTheSectionSetsIt(string document, bool expected)
+    {
+        //Arrange
+
+        //Act
+        ConnectorSection? section = ConnectorSection.Read(document, "target");
+        SampleTarget target = Deserialize<SampleTarget>(section!);
+
+        //Assert
+        Assert.That(target.Delta, Is.EqualTo(expected));
+    }
+
+    /// <summary>
     /// A job file written as JSON is read like one written as YAML.
     /// </summary>
     [Test]
@@ -205,6 +225,11 @@ public class ConnectorSectionTests
         /// Gets or sets the name of the synchronization.
         /// </summary>
         public string? ObjectNamespace { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the run is a delta synchronization.
+        /// </summary>
+        public bool Delta { get; set; }
 
         /// <summary>
         /// Gets or sets the batch size.

@@ -32,6 +32,11 @@ public class Configuration
     /// </summary>
     public const string DefaultDeletedColumnName = "Deleted";
 
+    /// <summary>
+    /// Default largest share of rows, in percent, that one reconciliation may remove.
+    /// </summary>
+    public const int DefaultThreshold = 10;
+
     #endregion
 
     #region Properties
@@ -71,10 +76,44 @@ public class Configuration
     public List<string>? PrimaryKeys { get; set; }
 
     /// <summary>
-    /// Gets or sets the deletion threshold as a percentage (0-100).
-    /// Prevents mass deletions during full sync by aborting when
-    /// the deletion count exceeds this threshold of existing rows.
+    /// Gets or sets a value indicating whether a full synchronization removes the target rows
+    /// whose key the source no longer returns.
     /// </summary>
+    /// <remarks>
+    /// Applies only when <see cref="Delta"/> is <c>false</c>, the source stream was read to its
+    /// end and no error was recorded. The rows are deleted, or stamped in the soft-delete column
+    /// when <see cref="HasDeletedColumn"/> is set. <see cref="DeletionConstraints"/> limits which
+    /// rows are considered and <see cref="Threshold"/> limits how many may be removed.
+    /// </remarks>
+    public bool ReconcileDeletions { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the run is a delta synchronization, as given by
+    /// <c>Delta</c> at the root of the job configuration.
+    /// </summary>
+    /// <remarks>
+    /// A delta synchronization returns only what changed, so the keys it does not return say
+    /// nothing about what was deleted and no reconciliation takes place.
+    /// </remarks>
+    public bool Delta { get; set; }
+
+    /// <summary>
+    /// Gets or sets the column values a target row must carry to take part in reconciliation.
+    /// Keys are target column names; a <c>null</c> value selects rows where the column is null.
+    /// </summary>
+    /// <remarks>
+    /// Required when several synchronizations write the same table: each one names the values
+    /// that mark its own rows, so that it never removes the rows of another.
+    /// </remarks>
+    public Dictionary<string, string?>? DeletionConstraints { get; set; }
+
+    /// <summary>
+    /// Gets or sets the largest share of the rows in scope, as a percentage from 0 to 100, that
+    /// one reconciliation may remove. Defaults to <c>10</c> when not set.
+    /// </summary>
+    /// <remarks>
+    /// When more rows would be removed, none is, and the run is recorded as failed.
+    /// </remarks>
     public int? Threshold { get; set; }
 
     /// <summary>

@@ -14,12 +14,14 @@ internal sealed class TargetColumn
     /// <param name="baseType">The upper-case system type name, such as <c>NVARCHAR</c>.</param>
     /// <param name="declaration">The full type declaration, such as <c>NVARCHAR(255)</c>.</param>
     /// <param name="collation">The column collation, or <c>null</c> for a type that has none.</param>
-    public TargetColumn(string name, string baseType, string declaration, string? collation)
+    /// <param name="maxLength">The storage length in bytes; <c>-1</c> for a MAX type.</param>
+    public TargetColumn(string name, string baseType, string declaration, string? collation, short maxLength = 0)
     {
         Name = name;
         BaseType = baseType;
         Declaration = declaration;
         Collation = collation;
+        MaxLength = maxLength;
     }
 
     #endregion
@@ -45,6 +47,11 @@ internal sealed class TargetColumn
     /// Gets the column collation, or <c>null</c> for a type that has none.
     /// </summary>
     public string? Collation { get; }
+
+    /// <summary>
+    /// Gets the storage length in bytes; <c>-1</c> for a MAX type.
+    /// </summary>
+    public short MaxLength { get; }
 
     #endregion
 }
