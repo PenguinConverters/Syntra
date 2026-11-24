@@ -142,26 +142,26 @@
       },
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "3.5.0.4",
-        "contentHash": "9jP3ZGlqXq6MAwx31OP2UgJASKlxtJZzCECRfDJ/dQL542nyhXpQhiyyOh7o6f0Fye90xyus+e0oLijksVzGiA=="
+        "resolved": "3.5.1",
+        "contentHash": "GoisdxLZWub1gsmSeoCEMzAAahxZHv0jA/Imj3u73N1SM8M6PK9lxcZpWOyPmbWX/cT74dR/BTB+na8ykN5EvA=="
       },
       "PenguinConverters.Keyra": {
         "type": "Transitive",
-        "resolved": "3.5.0.4",
-        "contentHash": "99EagCUdx7qmcLUFQ59hGl2R5pvvbtsEfTStd7lHxVKNB05C8WsUQ0SkMBRWnlW3F2XXPKxDxtyZ3PLeARgbpw==",
+        "resolved": "3.5.1",
+        "contentHash": "/c+32jxdZ/yJDnVDGCPe3+d4SHDvT58XyG0Vb34b4PLJGHt7YLO4T1jD0+gwCSERW7yxtTxWomxCvH+LKXIT4w==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
-          "PenguinConverters.CandyStore": "3.5.0.4",
-          "PenguinConverters.Keyra.Core": "3.5.0.4"
+          "PenguinConverters.CandyStore": "3.5.1",
+          "PenguinConverters.Keyra.Core": "3.5.1"
         }
       },
       "PenguinConverters.Keyra.Core": {
         "type": "Transitive",
-        "resolved": "3.5.0.4",
-        "contentHash": "J7TWeysRkGhlp5a8jmaJExd/5kC5CZx3IfwSi/WUHlg/1rZi/+AsetoaoJwItrsBJHWa42PIo4aopNGeq1WUxQ==",
+        "resolved": "3.5.1",
+        "contentHash": "4E923Tquw3HaW7dPgGXVSgAQ7tb51b0zM7r2gNmEFSkJIWO/97KnZBvz7K4dJ4Q0mQawl9407jAqUYN77RPNmg==",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "9.0.20",
-          "PenguinConverters.CandyStore": "3.5.0.4"
+          "PenguinConverters.CandyStore": "3.5.1"
         }
       },
       "System.Diagnostics.EventLog": {
@@ -190,7 +190,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.*, )",
-          "PenguinConverters.Keyra": "[3.5.0.*, )",
+          "PenguinConverters.Keyra": "[3.5.*, )",
           "YamlDotNet": "[18.1.0, )"
         }
       }
@@ -198,8 +198,8 @@
     "net10.0/linux-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "3.5.0.4",
-        "contentHash": "9jP3ZGlqXq6MAwx31OP2UgJASKlxtJZzCECRfDJ/dQL542nyhXpQhiyyOh7o6f0Fye90xyus+e0oLijksVzGiA=="
+        "resolved": "3.5.1",
+        "contentHash": "GoisdxLZWub1gsmSeoCEMzAAahxZHv0jA/Imj3u73N1SM8M6PK9lxcZpWOyPmbWX/cT74dR/BTB+na8ykN5EvA=="
       },
       "System.Diagnostics.EventLog": {
         "type": "Transitive",
@@ -215,8 +215,8 @@
     "net10.0/win-x64": {
       "PenguinConverters.CandyStore": {
         "type": "Transitive",
-        "resolved": "3.5.0.4",
-        "contentHash": "9jP3ZGlqXq6MAwx31OP2UgJASKlxtJZzCECRfDJ/dQL542nyhXpQhiyyOh7o6f0Fye90xyus+e0oLijksVzGiA=="
+        "resolved": "3.5.1",
+        "contentHash": "GoisdxLZWub1gsmSeoCEMzAAahxZHv0jA/Imj3u73N1SM8M6PK9lxcZpWOyPmbWX/cT74dR/BTB+na8ykN5EvA=="
       },
       "System.Diagnostics.EventLog": {
         "type": "Transitive",
