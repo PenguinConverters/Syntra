@@ -32,12 +32,12 @@
       },
       "Microsoft.Kiota.Http.HttpClientLibrary": {
         "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "oZ3ZR84InWEST6GyO9EBZMHweeprzlMiVsGy5dt9ec8Py1d6fgs4Yyyv0LJ56WoPc3Og5mM84pz3qD4hpiCT9w==",
+        "requested": "[2.1.6, )",
+        "resolved": "2.1.6",
+        "contentHash": "2WqLn450LzS9weAuPBTx4X3/xCQ8KJ1J9tfoiVBaUDUEW8X/1wl16xZYPCNtJ3xvI3V1viiRiz1tyMW3SfKxFA==",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0",
-          "Microsoft.Kiota.Abstractions": "2.0.0"
+          "Microsoft.Kiota.Abstractions": "2.1.6"
         }
       },
       "Azure.Core": {

@@ -411,8 +411,8 @@
       },
       "Microsoft.Graph": {
         "type": "Transitive",
-        "resolved": "6.5.0",
-        "contentHash": "44GSZ/Tz2L3ABVec5wl4EinUsCRT/pYE/Msmz8m7Pp2AYTDj3iDjzDjVmcCRGazklrYA/Hens/IEcWWPTrvEwg==",
+        "resolved": "6.10.0",
+        "contentHash": "hmSO3zNrzc3poitbCDnWOC4vP3z6f2nianaZEscX+/ItVlmxEzIbZ9dDLJ79MTfc5+4hoQT5rbX7FpZW9GNN0g==",
         "dependencies": {
           "Microsoft.Graph.Core": "4.0.1"
         }
@@ -532,11 +532,11 @@
       },
       "Microsoft.Kiota.Http.HttpClientLibrary": {
         "type": "Transitive",
-        "resolved": "2.0.0",
-        "contentHash": "oZ3ZR84InWEST6GyO9EBZMHweeprzlMiVsGy5dt9ec8Py1d6fgs4Yyyv0LJ56WoPc3Og5mM84pz3qD4hpiCT9w==",
+        "resolved": "2.1.6",
+        "contentHash": "2WqLn450LzS9weAuPBTx4X3/xCQ8KJ1J9tfoiVBaUDUEW8X/1wl16xZYPCNtJ3xvI3V1viiRiz1tyMW3SfKxFA==",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "8.0.0",
-          "Microsoft.Kiota.Abstractions": "2.0.0"
+          "Microsoft.Kiota.Abstractions": "2.1.6"
         }
       },
       "Microsoft.Kiota.Serialization.Form": {
@@ -759,7 +759,7 @@
           "Azure.Identity": "[1.*, )",
           "Microsoft.Kiota.Abstractions": "[2.1.6, )",
           "Microsoft.Kiota.Authentication.Azure": "[2.1.6, )",
-          "Microsoft.Kiota.Http.HttpClientLibrary": "[2.0.0, )",
+          "Microsoft.Kiota.Http.HttpClientLibrary": "[2.1.6, )",
           "PenguinConverters.Syntra.Core": "[1.0.0, )"
         }
       },
@@ -767,8 +767,8 @@
         "type": "Project",
         "dependencies": {
           "Azure.Identity": "[1.*, )",
-          "Microsoft.Graph": "[6.5.0, )",
-          "Microsoft.Kiota.Abstractions": "[2.0.0, )",
+          "Microsoft.Graph": "[6.10.0, )",
+          "Microsoft.Kiota.Abstractions": "[2.1.6, )",
           "PenguinConverters.Syntra.Core": "[1.0.0, )"
         }
       },
@@ -788,8 +788,8 @@
       "PenguinConverters.Syntra.Provider.RESTful": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Kiota.Abstractions": "[2.0.0, )",
-          "Microsoft.Kiota.Http.HttpClientLibrary": "[2.0.0, )",
+          "Microsoft.Kiota.Abstractions": "[2.1.6, )",
+          "Microsoft.Kiota.Http.HttpClientLibrary": "[2.1.6, )",
           "PenguinConverters.Syntra.Core": "[1.0.0, )"
         }
       },

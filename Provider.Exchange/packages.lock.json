@@ -13,20 +13,20 @@
       },
       "Microsoft.Graph": {
         "type": "Direct",
-        "requested": "[6.5.0, )",
-        "resolved": "6.5.0",
-        "contentHash": "44GSZ/Tz2L3ABVec5wl4EinUsCRT/pYE/Msmz8m7Pp2AYTDj3iDjzDjVmcCRGazklrYA/Hens/IEcWWPTrvEwg==",
+        "requested": "[6.10.0, )",
+        "resolved": "6.10.0",
+        "contentHash": "hmSO3zNrzc3poitbCDnWOC4vP3z6f2nianaZEscX+/ItVlmxEzIbZ9dDLJ79MTfc5+4hoQT5rbX7FpZW9GNN0g==",
         "dependencies": {
           "Microsoft.Graph.Core": "4.0.1"
         }
       },
       "Microsoft.Kiota.Abstractions": {
         "type": "Direct",
-        "requested": "[2.0.0, )",
-        "resolved": "2.0.0",
-        "contentHash": "cb0KA6QGvqMR1xNIjmErb5CiEbQJ/6odKcuPn2GTWD+aRMuldKDqRqRWMDT7MOBcUk9waJyJsgDG+ItQA01JmA==",
+        "requested": "[2.1.6, )",
+        "resolved": "2.1.6",
+        "contentHash": "Erl8w0ccrZnXxm+cFMbkMyJqJHAbtDyMF9hSxn/vMbvruun2TFZ6EBbQiETV6HJl8nm9h1IqK/NyL/xVVsh4bw==",
         "dependencies": {
-          "Std.UriTemplate": "2.0.8"
+          "Std.UriTemplate": "2.0.12"
         }
       },
       "Azure.Core": {
@@ -288,8 +288,8 @@
       },
       "Std.UriTemplate": {
         "type": "Transitive",
-        "resolved": "2.0.8",
-        "contentHash": "IAR4gJlLVD4r/FsU/rDb1+9sbB3/tCFVZz5IzlbM2yHoiUisBi5Ek/KXRUF7RcqNARka79EoaOz9INnXvQ/O6w=="
+        "resolved": "2.0.12",
+        "contentHash": "b/w8GfmVjf5c+8sTtGRVuwj6uC5KoPIn8+795xKlnGBBtph4FIVvgJVnh+x9dbDOkrst7XivIDJgyZSDFNsOYA=="
       },
       "System.ClientModel": {
         "type": "Transitive",
