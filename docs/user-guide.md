@@ -95,20 +95,31 @@ Target:
     Value: "BASE64_ENCRYPTED_VALUE"
     Protected: true
   PrimaryKeys:
-    objectGUID: "objectGUID"
-  Columns:
     - objectGUID
-    - sAMAccountName
-    - displayName
-    - mail
-    - department
-    - manager
-  Threshold: 10
-  MaxDegreeOfParallelism: 3
+  Columns:
+    objectGUID: {}
+    sAMAccountName: {}
+    displayName: {}
+    mail:
+      SourceProperty: "proxyMail"
+    department: {}
+    manager: {}
+  BatchSize: 2000
+  HasDeletedColumn: true
+  DeletedColumnName: "ADUserDeleted"
 
-Trigger:
-  Crontab: "0 */4 * * *"
+Schedule: "0 */4 * * *"
 ```
+
+Everything inside `Source` and `Target` is handed to the connector named by `Type` as
+written; the host itself reads only `Type`. The name in `ObjectNamespace` (the file name
+when it is not set) is passed to the target as well, where `Consumer.AzureSQL` names its
+staging table after it.
+
+For `Consumer.AzureSQL`, `Columns` maps each target column to its definition. A column
+is read from the source property of the same name unless `SourceProperty` names another.
+`BatchSize` is the number of rows applied per `MERGE`; above roughly 3,000 rows SQL Server
+locks the whole table for the duration of a batch instead of the rows written.
 
 ### Credential Protection
 
